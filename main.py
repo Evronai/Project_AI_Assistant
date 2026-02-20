@@ -677,9 +677,10 @@ def page_team():
                 a.markdown(f"**{m['name']}**  \n*{m['role']}*")
                 wc = workload_color(m["workload"])
                 mc = morale_color(m["morale"])
+                workload_badge = badge(f"{m['workload']:.0f}%", wc)
+                morale_badge = badge(f"{m['morale']:.0f}/100", mc)
                 b.markdown(
-                    f"Workload: {badge(f\"{m['workload']:.0f}%\", wc)}  \n"
-                    f"Morale:&nbsp;&nbsp;&nbsp;{badge(f\"{m['morale']:.0f}/100\", mc)}",
+                    f"Workload: {workload_badge}  \nMorale:&nbsp;&nbsp;&nbsp;{morale_badge}",
                     unsafe_allow_html=True,
                 )
                 c.markdown(f"Skills: `{'` · `'.join(m['skills']) if m['skills'] else 'None'}`")

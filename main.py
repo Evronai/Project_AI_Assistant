@@ -780,6 +780,59 @@ def section_header(title, subtitle=""):
 
 def df_to_csv(df): return df.to_csv(index=False).encode("utf-8")
 
+def ai_gate(label: str = "AI FEATURES") -> bool:
+    """
+    Render inline API-key setup when AI is not yet configured.
+    Returns True  → AI ready, caller may render AI buttons.
+    Returns False → setup panel shown, caller should skip AI buttons.
+    """
+    cfg = get_ai_config()
+    if cfg and cfg.get("api_key"):
+        return True
+
+    st.markdown(f"""
+    <div style="background:#1a1a00;border:1px solid #f1c21b;border-left:4px solid #f1c21b;
+                padding:1.25rem 1.5rem;margin:1rem 0">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;letter-spacing:0.1em;
+                    color:#f1c21b;margin-bottom:0.5rem">
+            ⚡ {label} — API KEY REQUIRED
+        </div>
+        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:0.875rem;color:#c6c6c6;margin-bottom:0.25rem">
+            Enter your DeepSeek API key to unlock all AI features.
+            Get a free key at
+            <a href="https://platform.deepseek.com" target="_blank" style="color:#78a9ff">
+            platform.deepseek.com</a> → API Keys → Create.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    form_key = "ai_gate_" + label.replace(" ", "_").replace("/", "_")
+    with st.form(form_key):
+        c1, c2 = st.columns([4, 1])
+        quick_key = c1.text_input(
+            "API Key", type="password",
+            placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            label_visibility="collapsed",
+        )
+        submitted = c2.form_submit_button("ACTIVATE", use_container_width=True)
+        if submitted:
+            if not quick_key.strip():
+                st.error("Paste your API key above.")
+            elif not quick_key.strip().startswith("sk-"):
+                st.error("Key must start with sk-")
+            else:
+                with st.spinner("Testing connection..."):
+                    ok, msg = test_api_key(quick_key.strip(), DEEPSEEK_URL)
+                if ok:
+                    save_ai_config("deepseek", quick_key.strip(), "deepseek-chat",
+                                   DEEPSEEK_URL, MONTHLY_BUDGET,
+                                   ["therapy","simulator","insights","retro","risk","forecast"])
+                    st.success("✅  AI activated — features unlocked.")
+                    st.rerun()
+                else:
+                    st.error(f"Connection failed: {msg}")
+    return False
+
 def select_project():
     projects = get_projects()
     if not projects: return None, None
@@ -922,43 +975,41 @@ def page_dashboard(project, projects):
     st.markdown("---")
     st.markdown('<div class="mono-label">AI ANALYSIS</div>', unsafe_allow_html=True)
 
-    if not (cfg and cfg.get("api_key")):
-        st.warning("AI not configured. Go to ⚙ **Settings** → add DeepSeek API key.")
-
-    b1,b2,b3 = st.columns(3)
-    run_health = b1.button("HEALTH ANALYSIS", use_container_width=True)
-    run_sim    = b2.button("SCENARIO FORECAST", use_container_width=True)
-    run_risk   = b3.button("RISK ANALYSIS", use_container_width=True)
-
     p_ctx = {k: project[k] for k in ("name","status","team_size","velocity","budget")}
 
-    if run_health:
-        with st.spinner("Analysing..."):
-            ts = {"avg_morale":avg_morale,"avg_workload":avg_workload,"count":len(team)}
-            prompt = (f"Analyse health of '{project['name']}'. Morale:{avg_morale:.1f}/100, "
-                      f"Workload:{avg_workload:.1f}%, Team:{len(team)}, Open risks:{open_risks}, "
-                      f"Budget used:{budget_pct:.0f}%.\n"
-                      "Give: 1) Health score 1-10 with rationale  2) Top 3 concerns ranked  3) Immediate action")
-            resp = call_ai(prompt,"therapy",{"project":p_ctx,"team":ts})
-        render_ai_result(resp,"HEALTH ANALYSIS")
+    if ai_gate("DASHBOARD AI ANALYSIS"):
+        b1,b2,b3 = st.columns(3)
+        run_health = b1.button("HEALTH ANALYSIS",   use_container_width=True)
+        run_sim    = b2.button("SCENARIO FORECAST", use_container_width=True)
+        run_risk   = b3.button("RISK ANALYSIS",     use_container_width=True)
 
-    if run_sim:
-        remaining_pts = project.get("total_points",0) - project.get("completed_points",0)
-        with st.spinner("Simulating..."):
-            prompt = (f"Forecast delivery for '{project['name']}'. Avg velocity:{avg_velocity:.1f} pts/sprint, "
-                      f"Remaining:{remaining_pts} points, Team:{len(team)}, Budget remaining:${project['budget']-total_expense:,.0f}.\n"
-                      "Give: 1) Expected delivery date range  2) Probability of on-time delivery  3) Top schedule risk")
-            resp = call_ai(prompt,"forecast",p_ctx)
-        render_ai_result(resp,"DELIVERY FORECAST")
+        if run_health:
+            with st.spinner("Analysing..."):
+                ts = {"avg_morale":avg_morale,"avg_workload":avg_workload,"count":len(team)}
+                prompt = (f"Analyse health of '{project['name']}'. Morale:{avg_morale:.1f}/100, "
+                          f"Workload:{avg_workload:.1f}%, Team:{len(team)}, Open risks:{open_risks}, "
+                          f"Budget used:{budget_pct:.0f}%.\n"
+                          "Give: 1) Health score 1-10 with rationale  2) Top 3 concerns ranked  3) Immediate action")
+                resp = call_ai(prompt,"therapy",{"project":p_ctx,"team":ts})
+            render_ai_result(resp,"HEALTH ANALYSIS")
 
-    if run_risk:
-        risk_summary = [{"title":r["title"],"score":r["probability"]*r["impact"],"status":r["status"]} for r in risks]
-        with st.spinner("Analysing risks..."):
-            prompt = (f"Analyse risks for '{project['name']}'. Current risks:\n"
-                      + "\n".join(f"- {r['title']} (score:{r['score']}, {r['status']})" for r in risk_summary)
-                      + "\nGive: 1) Critical risks to address now  2) Emerging patterns  3) Recommended mitigations")
-            resp = call_ai(prompt,"risk",{"risks":risk_summary,"project":p_ctx})
-        render_ai_result(resp,"RISK ANALYSIS")
+        if run_sim:
+            remaining_pts = project.get("total_points",0) - project.get("completed_points",0)
+            with st.spinner("Simulating..."):
+                prompt = (f"Forecast delivery for '{project['name']}'. Avg velocity:{avg_velocity:.1f} pts/sprint, "
+                          f"Remaining:{remaining_pts} points, Team:{len(team)}, Budget remaining:${project['budget']-total_expense:,.0f}.\n"
+                          "Give: 1) Expected delivery date range  2) Probability of on-time delivery  3) Top schedule risk")
+                resp = call_ai(prompt,"forecast",p_ctx)
+            render_ai_result(resp,"DELIVERY FORECAST")
+
+        if run_risk:
+            risk_summary = [{"title":r["title"],"score":r["probability"]*r["impact"],"status":r["status"]} for r in risks]
+            with st.spinner("Analysing risks..."):
+                prompt = (f"Analyse risks for '{project['name']}'. Current risks:\n"
+                          + "\n".join(f"- {r['title']} (score:{r['score']}, {r['status']})" for r in risk_summary)
+                          + "\nGive: 1) Critical risks to address now  2) Emerging patterns  3) Recommended mitigations")
+                resp = call_ai(prompt,"risk",{"risks":risk_summary,"project":p_ctx})
+            render_ai_result(resp,"RISK ANALYSIS")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1081,25 +1132,26 @@ def page_sprints(project, projects):
                     st.success("Retrospective saved!"); st.rerun()
 
             st.markdown("---")
-            if st.button("AI RETROSPECTIVE SUMMARY"):
-                with st.spinner("Generating..."):
-                    prompt = (f"Summarise retrospective for Sprint {sprint['number']} of '{project['name']}'.\n"
-                              f"Velocity: {sprint['completed_points']}/{sprint['planned_points']} pts.\n"
-                              f"Went well: {existing.get('went_well','none')}\n"
-                              f"To improve: {existing.get('improve','none')}\n"
-                              f"Actions: {existing.get('actions','none')}\n"
-                              "Generate: executive summary, key patterns, prioritised action recommendations.")
-                    resp = call_ai(prompt,"retro",{"sprint":sprint["number"],"project":project["name"]})
-                render_ai_result(resp,"AI RETROSPECTIVE SUMMARY")
+            if ai_gate("SPRINT RETROSPECTIVE AI"):
+                if st.button("AI RETROSPECTIVE SUMMARY"):
+                    with st.spinner("Generating..."):
+                        prompt = (f"Summarise retrospective for Sprint {sprint['number']} of '{project['name']}'.\n"
+                                  f"Velocity: {sprint['completed_points']}/{sprint['planned_points']} pts.\n"
+                                  f"Went well: {existing.get('went_well','none')}\n"
+                                  f"To improve: {existing.get('improve','none')}\n"
+                                  f"Actions: {existing.get('actions','none')}\n"
+                                  "Generate: executive summary, key patterns, prioritised action recommendations.")
+                        resp = call_ai(prompt,"retro",{"sprint":sprint["number"],"project":project["name"]})
+                    render_ai_result(resp,"AI RETROSPECTIVE SUMMARY")
 
     # ── AI Forecast tab ────────────────────────────────────────
     with tabs[3]:
-        cfg = get_ai_config()
-        if not (cfg and cfg.get("api_key")):
-            st.warning("Configure AI in ⚙ Settings first.")
+        if not ai_gate("SPRINT AI FORECAST"):
+            pass
         else:
+            completed_sprints_fc = [s for s in sprints if s["status"]=="completed"]
             remaining = project.get("total_points",0)-project.get("completed_points",0)
-            velocities = [s["completed_points"] for s in completed] if completed else [avg_velocity if (avg_velocity:=0) else 30]
+            velocities = [s["completed_points"] for s in completed_sprints_fc] if completed_sprints_fc else [30]
             avg_v = sum(velocities)/len(velocities) if velocities else 30
             sprints_left = math.ceil(remaining/avg_v) if avg_v else "unknown"
 
@@ -1232,17 +1284,18 @@ def page_risks(project, projects):
 
     # ── AI Analysis tab ────────────────────────────────────────
     with tabs[3]:
-        if st.button("GENERATE AI RISK ANALYSIS"):
-            risk_data = [{"title":r["title"],"score":r["probability"]*r["impact"],"category":r["category"],"status":r["status"]} for r in risks]
-            with st.spinner("Analysing..."):
-                prompt = (f"Comprehensive risk analysis for '{project['name']}'.\n"
-                          f"Open risks: {len(open_r)}, Critical (score≥12): {len(critical_r)}\n"
-                          "Risks:\n" + "\n".join(f"- {r['title']} | {r['category']} | score:{r['score']} | {r['status']}" for r in risk_data)
-                          + "\nProvide: 1) Top 3 immediate risks requiring action  "
-                          "2) Risk pattern analysis  3) Specific mitigations for highest risks  "
-                          "4) Risk forecast for next sprint")
-                resp = call_ai(prompt,"risk",{"project":project["name"],"risks":risk_data})
-            render_ai_result(resp,"AI RISK ANALYSIS")
+        if ai_gate("RISK AI ANALYSIS"):
+            if st.button("GENERATE AI RISK ANALYSIS"):
+                risk_data = [{"title":r["title"],"score":r["probability"]*r["impact"],"category":r["category"],"status":r["status"]} for r in risks]
+                with st.spinner("Analysing..."):
+                    prompt = (f"Comprehensive risk analysis for '{project['name']}'.\n"
+                              f"Open risks: {len(open_r)}, Critical (score≥12): {len(critical_r)}\n"
+                              "Risks:\n" + "\n".join(f"- {r['title']} | {r['category']} | score:{r['score']} | {r['status']}" for r in risk_data)
+                              + "\nProvide: 1) Top 3 immediate risks requiring action  "
+                              "2) Risk pattern analysis  3) Specific mitigations for highest risks  "
+                              "4) Risk forecast for next sprint")
+                    resp = call_ai(prompt,"risk",{"project":project["name"],"risks":risk_data})
+                render_ai_result(resp,"AI RISK ANALYSIS")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1433,17 +1486,18 @@ def page_team(project, projects):
                     st.warning(f"{sel_name} removed from team."); st.rerun()
 
         with tabs[3]:
-            if st.button("AI TEAM HEALTH ANALYSIS"):
-                team_summary = [{"name":m["name"],"role":m["role"],"workload":m["workload"],"morale":m["morale"]} for m in team]
-                with st.spinner("Analysing team..."):
-                    prompt = (f"Team health analysis for '{project['name']}'.\n"
-                              f"Avg morale: {avg_morale:.1f}, Avg workload: {avg_workload:.1f}%, "
-                              f"Overloaded: {overloaded}, Low morale: {low_morale_n}\n"
-                              "Team:\n" + "\n".join(f"- {m['name']} ({m['role']}): WL={m['workload']:.0f}% MO={m['morale']:.0f}" for m in team)
-                              + "\nGive: 1) Individual members at risk  2) Team dynamic concerns  "
-                              "3) Workload redistribution recommendation  4) Morale improvement actions")
-                    resp = call_ai(prompt,"therapy",{"team":team_summary})
-                render_ai_result(resp,"TEAM HEALTH ANALYSIS")
+            if ai_gate("TEAM AI INSIGHTS"):
+                if st.button("AI TEAM HEALTH ANALYSIS"):
+                    team_summary = [{"name":m["name"],"role":m["role"],"workload":m["workload"],"morale":m["morale"]} for m in team]
+                    with st.spinner("Analysing team..."):
+                        prompt = (f"Team health analysis for '{project['name']}'.\n"
+                                  f"Avg morale: {avg_morale:.1f}, Avg workload: {avg_workload:.1f}%, "
+                                  f"Overloaded: {overloaded}, Low morale: {low_morale_n}\n"
+                                  "Team:\n" + "\n".join(f"- {m['name']} ({m['role']}): WL={m['workload']:.0f}% MO={m['morale']:.0f}" for m in team)
+                                  + "\nGive: 1) Individual members at risk  2) Team dynamic concerns  "
+                                  "3) Workload redistribution recommendation  4) Morale improvement actions")
+                        resp = call_ai(prompt,"therapy",{"team":team_summary})
+                    render_ai_result(resp,"TEAM HEALTH ANALYSIS")
     else:
         st.info("No team members. Add one below.")
 
@@ -1491,12 +1545,14 @@ def page_projects(project, projects):
             } for p in projects])
             st.dataframe(df,use_container_width=True,hide_index=True)
 
-            if len(projects)>1 and st.button("AI PORTFOLIO COMPARE"):
-                with st.spinner("Comparing projects..."):
-                    plist = "\n".join(f"- {p['name']}: {p['status']}, vel={p['velocity']:.1f}, budget=${p['budget']:,.0f}" for p in projects[:4])
-                    prompt = f"Compare this portfolio:\n{plist}\n\nGive: 1) Healthiest project  2) Most at-risk  3) Resource allocation recommendation  4) Portfolio-level risk"
-                    resp = call_ai(prompt,"insights",{"projects":[{"name":p["name"],"status":p["status"]} for p in projects]})
-                render_ai_result(resp,"PORTFOLIO ANALYSIS")
+            if len(projects)>1:
+                if ai_gate("PORTFOLIO AI ANALYSIS"):
+                    if st.button("AI PORTFOLIO COMPARE"):
+                        with st.spinner("Comparing projects..."):
+                            plist = "\n".join(f"- {p['name']}: {p['status']}, vel={p['velocity']:.1f}, budget=${p['budget']:,.0f}" for p in projects[:4])
+                            prompt = f"Compare this portfolio:\n{plist}\n\nGive: 1) Healthiest project  2) Most at-risk  3) Resource allocation recommendation  4) Portfolio-level risk"
+                            resp = call_ai(prompt,"insights",{"projects":[{"name":p["name"],"status":p["status"]} for p in projects]})
+                        render_ai_result(resp,"PORTFOLIO ANALYSIS")
 
     with tabs[1]:
         with st.form("create_project_form"):
@@ -1681,6 +1737,363 @@ def page_settings(project, projects):
 # ═════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═════════════════════════════════════════════════════════════════════════════
+# PAGE: AI ASSISTANT — all features in one place, always visible
+# ═════════════════════════════════════════════════════════════════════════════
+def page_ai_assistant(project, projects):
+    pid = project["id"]
+    section_header("AI ASSISTANT", f"All AI features for  {project['name']}")
+
+    # ── Gate: show setup if not configured ───────────────────
+    cfg = get_ai_config()
+    ai_ready = bool(cfg and cfg.get("api_key"))
+
+    if not ai_ready:
+        st.markdown("""
+        <div style="background:#1a1a00;border:1px solid #f1c21b;border-left:4px solid #f1c21b;
+                    padding:1.5rem 2rem;margin-bottom:2rem">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;letter-spacing:0.1em;
+                        color:#f1c21b;margin-bottom:0.75rem">⚡ STEP 1 — ACTIVATE AI</div>
+            <div style="font-family:'IBM Plex Sans',sans-serif;font-size:0.9rem;color:#c6c6c6;margin-bottom:0.5rem">
+                All 6 AI features below require a DeepSeek API key.<br>
+                Get a <strong style="color:#f4f4f4">free key</strong> at
+                <a href="https://platform.deepseek.com" target="_blank" style="color:#78a9ff">
+                platform.deepseek.com</a> → sign up → API Keys → Create key.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        with st.form("ai_assistant_setup"):
+            c1, c2 = st.columns([5, 1])
+            key_input = c1.text_input(
+                "Paste API key here",
+                type="password",
+                placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                label_visibility="visible",
+            )
+            st.markdown("")
+            if st.form_submit_button("✓  TEST & ACTIVATE", use_container_width=True):
+                if not key_input.strip():
+                    st.error("Paste your API key above.")
+                elif not key_input.strip().startswith("sk-"):
+                    st.error("Key must start with  sk-")
+                else:
+                    with st.spinner("Testing connection to DeepSeek..."):
+                        ok, msg = test_api_key(key_input.strip(), DEEPSEEK_URL)
+                    if ok:
+                        save_ai_config("deepseek", key_input.strip(), "deepseek-chat",
+                                       DEEPSEEK_URL, MONTHLY_BUDGET,
+                                       ["therapy","simulator","insights","retro","risk","forecast"])
+                        st.success("✅  AI activated — all features unlocked. Reloading...")
+                        st.rerun()
+                    else:
+                        st.error(f"Connection failed: {msg}")
+        st.markdown("---")
+        st.markdown('<div style="font-family:IBM Plex Mono,monospace;font-size:0.8rem;color:#525252;text-align:center;padding:1rem">👇 Preview of all features available once activated</div>', unsafe_allow_html=True)
+
+    # ── Load all project data upfront ────────────────────────
+    team    = get_team(pid)
+    sprints = get_sprints(pid)
+    risks   = get_risks(pid)
+    entries = get_budget_entries(pid)
+
+    avg_morale   = sum(m["morale"]   for m in team)/len(team) if team else 75.0
+    avg_workload = sum(m["workload"] for m in team)/len(team) if team else 70.0
+    completed_sp = [s for s in sprints if s["status"]=="completed"]
+    avg_velocity = sum(s["completed_points"] for s in completed_sp)/len(completed_sp) if completed_sp else 30.0
+    open_risks   = [r for r in risks if r["status"]=="open"]
+    total_expense= sum(e["amount"] for e in entries if e["entry_type"]=="expense")
+    remaining_pts= project.get("total_points",0) - project.get("completed_points",0)
+    p_ctx        = {k: project[k] for k in ("name","status","team_size","velocity","budget")}
+
+    # ── Feature cards ─────────────────────────────────────────
+    # Rendered in a 2-column grid. Each card:
+    #   • Icon + title + description always visible
+    #   • Input controls (scenario picker, sprint selector, etc.)
+    #   • One big RUN button
+    #   • Result appears inline below the card
+
+    def feature_header(icon, title, desc, key_suffix):
+        st.markdown(f"""
+        <div style="background:#1e2a3a;border:1px solid #0f62fe;border-top:3px solid #0f62fe;
+                    padding:1rem 1.25rem 0.5rem 1.25rem;margin-bottom:0">
+            <div style="font-size:1.4rem;margin-bottom:4px">{icon}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:0.95rem;
+                        color:#f4f4f4;letter-spacing:0.02em">{title}</div>
+            <div style="font-family:'IBM Plex Sans',sans-serif;font-size:0.8rem;color:#a8a8a8;
+                        margin-top:4px;min-height:2.4rem">{desc}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("")
+
+    # ── Row 1: Health Analysis + What-If Simulator ────────────
+    row1_l, row1_r = st.columns(2)
+
+    # ── 1. PROJECT HEALTH ANALYSIS ───────────────────────────
+    with row1_l:
+        feature_header("🧠", "PROJECT HEALTH ANALYSIS",
+                        "Score your project 1–10. Surfaces top concerns and one concrete action for the PM.",
+                        "health")
+        with st.container(border=True):
+            st.markdown(f"""
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:#a8a8a8;padding:0.5rem 0">
+                Team morale: <b style="color:#f4f4f4">{avg_morale:.0f}/100</b> &nbsp;·&nbsp;
+                Workload: <b style="color:#f4f4f4">{avg_workload:.0f}%</b> &nbsp;·&nbsp;
+                Open risks: <b style="color:#f4f4f4">{len(open_risks)}</b> &nbsp;·&nbsp;
+                Budget used: <b style="color:#f4f4f4">{total_expense/project['budget']*100:.0f}%</b>
+            </div>
+            """, unsafe_allow_html=True)
+            run_health = st.button("▶  RUN HEALTH ANALYSIS", key="btn_health",
+                                   use_container_width=True, disabled=not ai_ready)
+
+        if run_health:
+            with st.spinner("Analysing project health..."):
+                prompt = (
+                    f"Project health analysis for '{project['name']}'.\n"
+                    f"Status: {project['status']}, Priority: {project.get('priority','medium')}\n"
+                    f"Team: {len(team)} people, avg morale {avg_morale:.1f}/100, avg workload {avg_workload:.1f}%\n"
+                    f"Open risks: {len(open_risks)}, Sprint velocity: {avg_velocity:.1f} pts\n"
+                    f"Budget: {total_expense/project['budget']*100:.1f}% used (${total_expense:,.0f} of ${project['budget']:,.0f})\n\n"
+                    "Give:\n"
+                    "1. Overall health score 1–10 with one-line rationale\n"
+                    "2. Top 3 concerns in priority order (one sentence each)\n"
+                    "3. One immediate action the PM should take this week"
+                )
+                resp = call_ai(prompt, "therapy", {"project": p_ctx, "team": {"avg_morale": avg_morale, "avg_workload": avg_workload}})
+            render_ai_result(resp, "🧠 PROJECT HEALTH ANALYSIS")
+
+    # ── 2. WHAT-IF SIMULATOR ─────────────────────────────────
+    with row1_r:
+        feature_header("🎲", "WHAT-IF SIMULATOR",
+                        "Model the impact of team or scope changes on schedule, cost, and risk before committing.",
+                        "sim")
+        with st.container(border=True):
+            sim_scenario = st.selectbox("Choose a scenario", [
+                "Add 1 senior developer",
+                "Add 2 senior developers",
+                "Remove 1 team member (attrition)",
+                "Reduce scope by 20%",
+                "Reduce scope by 30%",
+                "Extend deadline by 4 weeks",
+                "Cut budget by 15%",
+                "Add contractor for 6 weeks",
+                "Custom…",
+            ], key="sim_scenario", label_visibility="visible")
+            if sim_scenario == "Custom…":
+                sim_scenario = st.text_input("Describe your scenario", placeholder="e.g. Swap frontend dev for a designer", key="sim_custom")
+            run_sim = st.button("▶  RUN SIMULATION", key="btn_sim",
+                                use_container_width=True, disabled=not ai_ready)
+
+        if run_sim and sim_scenario:
+            with st.spinner(f"Simulating: {sim_scenario}..."):
+                prompt = (
+                    f"What-if simulation for '{project['name']}'.\n"
+                    f"Current state: team={len(team)}, velocity={avg_velocity:.1f} pts/sprint, "
+                    f"remaining={remaining_pts} pts, budget remaining=${project['budget']-total_expense:,.0f}\n"
+                    f"Scenario: {sim_scenario}\n\n"
+                    "Give:\n"
+                    "1. Predicted outcome with probability estimate (%)\n"
+                    "2. Impact on delivery date (weeks earlier/later)\n"
+                    "3. Impact on budget ($)\n"
+                    "4. Top risk introduced by this change\n"
+                    "5. Recommendation: proceed / proceed with caution / avoid"
+                )
+                resp = call_ai(prompt, "simulator", p_ctx)
+            render_ai_result(resp, f"🎲 SIMULATION — {sim_scenario.upper()}")
+
+    st.markdown("---")
+
+    # ── Row 2: Sprint Retrospective + Risk Analysis ───────────
+    row2_l, row2_r = st.columns(2)
+
+    # ── 3. SPRINT RETROSPECTIVE ───────────────────────────────
+    with row2_l:
+        feature_header("🔄", "SPRINT RETROSPECTIVE",
+                        "Generate an AI-facilitated retro for any completed sprint: went well, improve, action items.",
+                        "retro")
+        with st.container(border=True):
+            completed_names = [f"Sprint {s['number']}: {s.get('goal','')[:35]}" for s in completed_sp]
+            if not completed_names:
+                st.caption("No completed sprints yet.")
+                run_retro = st.button("▶  RUN RETROSPECTIVE", key="btn_retro",
+                                      use_container_width=True, disabled=True)
+                sel_sprint_retro = None
+            else:
+                retro_choice = st.selectbox("Select sprint", completed_names, key="retro_sprint")
+                sel_num = int(retro_choice.split(":")[0].replace("Sprint","").strip())
+                sel_sprint_retro = next((s for s in completed_sp if s["number"]==sel_num), completed_sp[-1])
+                existing_notes = sel_sprint_retro.get("retro_notes", {})
+                run_retro = st.button("▶  RUN RETROSPECTIVE", key="btn_retro",
+                                      use_container_width=True, disabled=not ai_ready)
+
+        if run_retro and sel_sprint_retro:
+            with st.spinner("Generating retrospective..."):
+                notes = sel_sprint_retro.get("retro_notes", {})
+                prompt = (
+                    f"Sprint retrospective for Sprint {sel_sprint_retro['number']} of '{project['name']}'.\n"
+                    f"Goal: {sel_sprint_retro.get('goal','not set')}\n"
+                    f"Velocity: {sel_sprint_retro['completed_points']}/{sel_sprint_retro['planned_points']} pts "
+                    f"({sel_sprint_retro['completion_pct']:.0f}% complete)\n"
+                    f"Blockers: {', '.join(sel_sprint_retro['blockers']) or 'none'}\n"
+                    f"Team notes — Went well: {notes.get('went_well','none')}\n"
+                    f"Team notes — To improve: {notes.get('improve','none')}\n"
+                    f"Team notes — Actions: {notes.get('actions','none')}\n\n"
+                    "Structure your response as:\n"
+                    "**WENT WELL** (2–3 bullets)\n"
+                    "**TO IMPROVE** (2–3 bullets)\n"
+                    "**ACTION ITEMS** (3 specific, owner-assignable tasks)\n"
+                    "**PATTERN** (one insight connecting this sprint to the project trend)"
+                )
+                resp = call_ai(prompt, "retro", {"sprint": sel_sprint_retro["number"], "project": project["name"]})
+            render_ai_result(resp, f"🔄 RETROSPECTIVE — SPRINT {sel_sprint_retro['number']}")
+
+    # ── 4. RISK ANALYSIS ─────────────────────────────────────
+    with row2_r:
+        feature_header("⚠️", "RISK ANALYSIS",
+                        "AI-prioritised risk report: critical items, emerging patterns, and specific mitigations.",
+                        "risk")
+        with st.container(border=True):
+            risk_focus = st.selectbox("Focus area", [
+                "Full risk register review",
+                "Critical risks only (score ≥ 12)",
+                "People & team risks",
+                "Technical risks",
+                "Financial risks",
+                "Next sprint risk forecast",
+            ], key="risk_focus", label_visibility="visible")
+            if not risks:
+                st.caption("No risks logged yet. Add risks in the Risk Register page.")
+            run_risk_ai = st.button("▶  RUN RISK ANALYSIS", key="btn_risk",
+                                    use_container_width=True, disabled=(not ai_ready or not risks))
+
+        if run_risk_ai:
+            risk_data = [{"title": r["title"], "category": r["category"],
+                          "score": r["probability"]*r["impact"], "status": r["status"],
+                          "mitigation": r.get("mitigation","")} for r in risks]
+            with st.spinner("Analysing risks..."):
+                prompt = (
+                    f"Risk analysis for '{project['name']}'. Focus: {risk_focus}\n"
+                    f"Open: {len(open_risks)}, "
+                    f"Critical (≥12): {len([r for r in risk_data if r['score']>=12])}, "
+                    f"Mitigated: {len([r for r in risks if r['status']=='mitigated'])}\n\n"
+                    "Risks:\n" + "\n".join(
+                        f"- [{r['category'].upper()}] {r['title']} | score {r['score']} | {r['status']} | mitigation: {r['mitigation'] or 'none'}"
+                        for r in sorted(risk_data, key=lambda x: -x["score"])
+                    ) + "\n\n"
+                    "Give:\n"
+                    "1. Top 3 risks requiring immediate action (with specific next steps)\n"
+                    "2. Risk pattern or systemic issue detected\n"
+                    "3. One risk that is currently underestimated\n"
+                    "4. Forecast: which risk is most likely to materialise in the next 2 sprints"
+                )
+                resp = call_ai(prompt, "risk", {"project": project["name"], "risks": risk_data})
+            render_ai_result(resp, f"⚠️ RISK ANALYSIS — {risk_focus.upper()}")
+
+    st.markdown("---")
+
+    # ── Row 3: Delivery Forecast + Cross-Project Insights ─────
+    row3_l, row3_r = st.columns(2)
+
+    # ── 5. DELIVERY FORECAST ─────────────────────────────────
+    with row3_l:
+        feature_header("📅", "DELIVERY FORECAST",
+                        "Data-driven delivery date estimate with confidence intervals based on actual sprint velocity.",
+                        "forecast")
+        with st.container(border=True):
+            velocities = [s["completed_points"] for s in completed_sp] if completed_sp else []
+            st.markdown(f"""
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:#a8a8a8;padding:0.5rem 0">
+                Remaining: <b style="color:#f4f4f4">{remaining_pts} pts</b> &nbsp;·&nbsp;
+                Avg velocity: <b style="color:#f4f4f4">{avg_velocity:.1f} pts/sprint</b> &nbsp;·&nbsp;
+                Sprints done: <b style="color:#f4f4f4">{len(completed_sp)}</b>
+            </div>
+            """, unsafe_allow_html=True)
+            forecast_scenario = st.selectbox("Scenario", [
+                "Current pace (no changes)",
+                "Add 1 developer next sprint",
+                "Reduce scope by 20%",
+                "Team velocity improves 10% (learning curve)",
+                "Velocity drops 15% (team fatigue)",
+            ], key="forecast_scenario")
+            run_forecast = st.button("▶  RUN FORECAST", key="btn_forecast",
+                                     use_container_width=True, disabled=not ai_ready)
+
+        if run_forecast:
+            with st.spinner("Calculating delivery forecast..."):
+                prompt = (
+                    f"Delivery forecast for '{project['name']}'.\n"
+                    f"Total points: {project.get('total_points',0)}, "
+                    f"Completed: {project.get('completed_points',0)}, "
+                    f"Remaining: {remaining_pts} pts\n"
+                    f"Sprint history (completed points): {velocities}\n"
+                    f"Avg velocity: {avg_velocity:.1f} pts/sprint, Sprint length: 2 weeks\n"
+                    f"Budget remaining: ${project['budget']-total_expense:,.0f}\n"
+                    f"Target end date: {project.get('end_date','not set')}\n"
+                    f"Scenario: {forecast_scenario}\n\n"
+                    "Give:\n"
+                    "1. Expected delivery date with 80% confidence interval (best / most likely / worst case)\n"
+                    "2. Probability of hitting the original target end date (%)\n"
+                    "3. Number of sprints remaining under this scenario\n"
+                    "4. Budget projection at completion\n"
+                    "5. Top factor that would change this forecast"
+                )
+                resp = call_ai(prompt, "forecast", p_ctx)
+            render_ai_result(resp, f"📅 DELIVERY FORECAST — {forecast_scenario.upper()}")
+
+    # ── 6. CROSS-PROJECT INSIGHTS ─────────────────────────────
+    with row3_r:
+        feature_header("🔗", "CROSS-PROJECT INSIGHTS",
+                        "Compare projects in your portfolio to surface patterns, lessons, and resource opportunities.",
+                        "insights")
+        with st.container(border=True):
+            all_projects = get_projects()
+            if len(all_projects) < 2:
+                st.caption("Add a second project to enable comparison.")
+                run_insights = st.button("▶  RUN COMPARISON", key="btn_insights",
+                                         use_container_width=True, disabled=True)
+            else:
+                other_projects = [p for p in all_projects if p["id"] != pid]
+                compare_to = st.selectbox("Compare with", [p["name"] for p in other_projects], key="compare_proj")
+                insights_focus = st.selectbox("Focus", [
+                    "Overall comparison",
+                    "Velocity & delivery performance",
+                    "Team & resource patterns",
+                    "Risk patterns",
+                    "Budget efficiency",
+                ], key="insights_focus")
+                run_insights = st.button("▶  RUN COMPARISON", key="btn_insights",
+                                         use_container_width=True, disabled=not ai_ready)
+
+            if run_insights and len(all_projects) >= 2:
+                proj_b = next(p for p in all_projects if p["name"] == compare_to)
+                team_b = get_team(proj_b["id"])
+                sprints_b = get_sprints(proj_b["id"])
+                completed_b = [s for s in sprints_b if s["status"]=="completed"]
+                vel_b = sum(s["completed_points"] for s in completed_b)/len(completed_b) if completed_b else 0
+                with st.spinner("Comparing projects..."):
+                    prompt = (
+                        f"Cross-project comparison. Focus: {insights_focus}\n\n"
+                        f"Project A: '{project['name']}'\n"
+                        f"  Status: {project['status']}, Team: {len(team)}, "
+                        f"Velocity: {avg_velocity:.1f} pts/sprint, "
+                        f"Budget: ${project['budget']:,.0f} ({total_expense/project['budget']*100:.0f}% used), "
+                        f"Open risks: {len(open_risks)}\n\n"
+                        f"Project B: '{proj_b['name']}'\n"
+                        f"  Status: {proj_b['status']}, Team: {len(team_b)}, "
+                        f"Velocity: {vel_b:.1f} pts/sprint, "
+                        f"Budget: ${proj_b['budget']:,.0f}, "
+                        f"Open risks: {len([r for r in get_risks(proj_b['id']) if r['status']=='open'])}\n\n"
+                        "Give:\n"
+                        "1. Which project is performing better and why\n"
+                        "2. Most significant difference between the projects\n"
+                        "3. Specific lesson from the better-performing project the other should adopt\n"
+                        "4. Resource or process that could be shared between projects"
+                    )
+                    resp = call_ai(prompt, "insights")
+                render_ai_result(resp, f"🔗 COMPARISON — {project['name'].upper()} vs {compare_to.upper()}")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 def main():
     st.set_page_config(
         page_title=APP_TITLE,
@@ -1713,6 +2126,7 @@ def main():
         st.markdown("---")
         page = st.radio("", [
             "DASHBOARD",
+            "⬡ AI ASSISTANT",
             "SPRINT BOARD",
             "RISK REGISTER",
             "BUDGET",
@@ -1745,18 +2159,46 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
+        # Sidebar quick-setup when AI not configured
+        if not ai_ok:
+            st.markdown("---")
+            st.markdown('<div style="font-family:IBM Plex Mono,monospace;font-size:0.7rem;letter-spacing:0.08em;color:#f1c21b;margin-bottom:6px">⚡ QUICK SETUP</div>', unsafe_allow_html=True)
+            with st.form("sidebar_ai_setup"):
+                sb_key = st.text_input("DeepSeek API Key", type="password",
+                                       placeholder="sk-...",
+                                       label_visibility="collapsed",
+                                       help="Get free key at platform.deepseek.com")
+                if st.form_submit_button("ACTIVATE AI", use_container_width=True):
+                    if not sb_key.strip():
+                        st.error("Enter API key")
+                    elif not sb_key.strip().startswith("sk-"):
+                        st.error("Must start with sk-")
+                    else:
+                        with st.spinner("Connecting..."):
+                            ok, msg = test_api_key(sb_key.strip(), DEEPSEEK_URL)
+                        if ok:
+                            save_ai_config("deepseek", sb_key.strip(), "deepseek-chat",
+                                           DEEPSEEK_URL, MONTHLY_BUDGET,
+                                           ["therapy","simulator","insights","retro","risk","forecast"])
+                            st.success("✅ AI activated!")
+                            st.rerun()
+                        else:
+                            st.error(msg)
+            st.markdown('<div style="font-family:IBM Plex Mono,monospace;font-size:0.68rem;color:#525252">platform.deepseek.com → API Keys</div>', unsafe_allow_html=True)
+
         if not CRYPTO_AVAILABLE:
             st.markdown('<div style="font-family:IBM Plex Mono,monospace;font-size:0.7rem;color:#f1c21b;margin-top:8px">⚠ cryptography not installed</div>', unsafe_allow_html=True)
 
     # ── Route ─────────────────────────────────────────────────
     pages = {
-        "DASHBOARD":     page_dashboard,
-        "SPRINT BOARD":  page_sprints,
-        "RISK REGISTER": page_risks,
-        "BUDGET":        page_budget,
-        "TEAM":          page_team,
-        "PROJECTS":      page_projects,
-        "SETTINGS":      page_settings,
+        "DASHBOARD":       page_dashboard,
+        "⬡ AI ASSISTANT":  page_ai_assistant,
+        "SPRINT BOARD":    page_sprints,
+        "RISK REGISTER":   page_risks,
+        "BUDGET":          page_budget,
+        "TEAM":            page_team,
+        "PROJECTS":        page_projects,
+        "SETTINGS":        page_settings,
     }
     pages[page](project, projects)
 

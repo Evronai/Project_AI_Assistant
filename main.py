@@ -1884,7 +1884,8 @@ def page_ai_assistant(project, projects):
             run_sim = st.button("▶  RUN SIMULATION", key="btn_sim",
                                 use_container_width=True, disabled=not ai_ready)
 
-        if run_sim and sim_scenario:
+        if run_sim:
+            sim_scenario = st.session_state.get("sim_custom") if st.session_state.get("sim_scenario") == "Custom…" else st.session_state.get("sim_scenario", "Add 1 senior developer")
             with st.spinner(f"Simulating: {sim_scenario}..."):
                 prompt = (
                     f"What-if simulation for '{project['name']}'.\n"
@@ -1926,7 +1927,14 @@ def page_ai_assistant(project, projects):
                 run_retro = st.button("▶  RUN RETROSPECTIVE", key="btn_retro",
                                       use_container_width=True, disabled=not ai_ready)
 
-        if run_retro and sel_sprint_retro:
+        if run_retro and completed_sp:
+            # Read sprint selection from session_state to get the value at button-press time
+            retro_key = st.session_state.get("retro_sprint", completed_names[0] if completed_names else "")
+            try:
+                sel_num = int(retro_key.split(":")[0].replace("Sprint","").strip())
+                sel_sprint_retro = next((s for s in completed_sp if s["number"]==sel_num), completed_sp[-1])
+            except (ValueError, IndexError):
+                sel_sprint_retro = completed_sp[-1]
             with st.spinner("Generating retrospective..."):
                 notes = sel_sprint_retro.get("retro_notes", {})
                 prompt = (
@@ -1967,26 +1975,103 @@ def page_ai_assistant(project, projects):
                                     use_container_width=True, disabled=(not ai_ready or not risks))
 
         if run_risk_ai:
-            risk_data = [{"title": r["title"], "category": r["category"],
-                          "score": r["probability"]*r["impact"], "status": r["status"],
-                          "mitigation": r.get("mitigation","")} for r in risks]
-            with st.spinner("Analysing risks..."):
-                prompt = (
-                    f"Risk analysis for '{project['name']}'. Focus: {risk_focus}\n"
-                    f"Open: {len(open_risks)}, "
-                    f"Critical (≥12): {len([r for r in risk_data if r['score']>=12])}, "
-                    f"Mitigated: {len([r for r in risks if r['status']=='mitigated'])}\n\n"
-                    "Risks:\n" + "\n".join(
-                        f"- [{r['category'].upper()}] {r['title']} | score {r['score']} | {r['status']} | mitigation: {r['mitigation'] or 'none'}"
-                        for r in sorted(risk_data, key=lambda x: -x["score"])
-                    ) + "\n\n"
+            # Read focus directly from session_state — guaranteed current value
+            # even after Streamlit re-runs the script on button press
+            risk_focus = st.session_state.get("risk_focus", "Full risk register review")
+
+            # ── Build full risk data ──────────────────────────────
+            all_risk_data = [{
+                "title":      r["title"],
+                "category":   r["category"],
+                "probability":r["probability"],
+                "impact":     r["impact"],
+                "score":      r["probability"] * r["impact"],
+                "status":     r["status"],
+                "owner":      r.get("owner", "unassigned"),
+                "mitigation": r.get("mitigation", "none"),
+                "description":r.get("description", ""),
+            } for r in risks]
+
+            # ── Filter data AND tailor prompt per focus area ──────
+            CATEGORY_MAP = {
+                "People & team risks":  ["people"],
+                "Technical risks":      ["technical"],
+                "Financial risks":      ["financial"],
+            }
+
+            if risk_focus == "Critical risks only (score ≥ 12)":
+                filtered = [r for r in all_risk_data if r["score"] >= 12]
+                focus_instruction = (
+                    "You are reviewing CRITICAL risks only (probability × impact ≥ 12).\n"
                     "Give:\n"
-                    "1. Top 3 risks requiring immediate action (with specific next steps)\n"
-                    "2. Risk pattern or systemic issue detected\n"
-                    "3. One risk that is currently underestimated\n"
-                    "4. Forecast: which risk is most likely to materialise in the next 2 sprints"
+                    "1. For each critical risk: severity verdict, immediate action required, and who should own it\n"
+                    "2. Are any of these risks connected or could they cascade? Explain\n"
+                    "3. Emergency mitigation: what must be done in the next 48 hours\n"
+                    "4. Escalation recommendation: which risks need executive attention"
                 )
-                resp = call_ai(prompt, "risk", {"project": project["name"], "risks": risk_data})
+
+            elif risk_focus in CATEGORY_MAP:
+                cats = CATEGORY_MAP[risk_focus]
+                filtered = [r for r in all_risk_data if r["category"] in cats]
+                category_label = risk_focus.replace(" risks", "").upper()
+                focus_instruction = (
+                    f"You are reviewing {risk_focus.upper()} ONLY — ignore other categories.\n"
+                    "Give:\n"
+                    f"1. Assessment of the {category_label} risk landscape: is it well-managed or a concern?\n"
+                    f"2. Highest-priority {category_label} risk and why it outranks the others\n"
+                    f"3. Gaps: what {category_label} risks are likely missing from this register?\n"
+                    f"4. Specific {category_label} mitigation actions the team should take this sprint"
+                )
+
+            elif risk_focus == "Next sprint risk forecast":
+                filtered = [r for r in all_risk_data if r["status"] == "open"]
+                sprint_context = f"{len(completed_sp)} sprints completed, avg velocity {avg_velocity:.1f} pts"
+                focus_instruction = (
+                    "You are forecasting which risks are most likely to MATERIALISE in the next sprint.\n"
+                    f"Sprint context: {sprint_context}\n"
+                    "Give:\n"
+                    "1. Top 2 risks most likely to hit in the next 2 weeks — explain your reasoning\n"
+                    "2. Early warning signs the team should watch for each\n"
+                    "3. Pre-emptive actions to take BEFORE the sprint starts\n"
+                    "4. Risk that has the highest chance of derailing the sprint goal"
+                )
+
+            else:  # Full risk register review
+                filtered = all_risk_data
+                focus_instruction = (
+                    "You are doing a FULL risk register review across all categories.\n"
+                    "Give:\n"
+                    "1. Overall risk posture: red / amber / green with one-line justification\n"
+                    "2. Top 3 risks requiring immediate action (with specific next steps and owners)\n"
+                    "3. One systemic pattern or root cause connecting multiple risks\n"
+                    "4. One risk that appears underestimated based on its current score vs description"
+                )
+
+            # ── Fall back to all risks if filter returns nothing ──
+            if not filtered:
+                filtered = all_risk_data
+                st.caption(f"No risks found in category '{risk_focus}' — showing full register.")
+
+            risk_list_text = "\n".join(
+                f"- [{r['category'].upper()}] {r['title']} "
+                f"| P={r['probability']} I={r['impact']} Score={r['score']} "
+                f"| {r['status'].upper()} | Owner: {r['owner']} "
+                f"| Mitigation: {r['mitigation']}"
+                for r in sorted(filtered, key=lambda x: -x["score"])
+            )
+
+            with st.spinner(f"Analysing: {risk_focus}..."):
+                prompt = (
+                    f"Risk analysis for project '{project['name']}'.\n"
+                    f"Total risks in register: {len(risks)} "
+                    f"({len(open_risks)} open, "
+                    f"{len([r for r in risks if r['status']=='mitigated'])} mitigated, "
+                    f"{len([r for r in risks if r['status']=='closed'])} closed)\n\n"
+                    f"Risks being analysed ({len(filtered)} of {len(risks)}):\n"
+                    f"{risk_list_text}\n\n"
+                    f"{focus_instruction}"
+                )
+                resp = call_ai(prompt, "risk", {"project": project["name"], "focus": risk_focus, "risk_count": len(filtered)})
             render_ai_result(resp, f"⚠️ RISK ANALYSIS — {risk_focus.upper()}")
 
     st.markdown("---")
@@ -2019,6 +2104,7 @@ def page_ai_assistant(project, projects):
                                      use_container_width=True, disabled=not ai_ready)
 
         if run_forecast:
+            forecast_scenario = st.session_state.get("forecast_scenario", "Current pace (no changes)")
             with st.spinner("Calculating delivery forecast..."):
                 prompt = (
                     f"Delivery forecast for '{project['name']}'.\n"
@@ -2065,7 +2151,10 @@ def page_ai_assistant(project, projects):
                                          use_container_width=True, disabled=not ai_ready)
 
             if run_insights and len(all_projects) >= 2:
-                proj_b = next(p for p in all_projects if p["name"] == compare_to)
+                # Read both selectors from session_state — guaranteed correct on re-run
+                compare_to    = st.session_state.get("compare_proj", other_projects[0]["name"])
+                insights_focus = st.session_state.get("insights_focus", "Overall comparison")
+                proj_b = next((p for p in all_projects if p["name"] == compare_to), other_projects[0])
                 team_b = get_team(proj_b["id"])
                 sprints_b = get_sprints(proj_b["id"])
                 completed_b = [s for s in sprints_b if s["status"]=="completed"]

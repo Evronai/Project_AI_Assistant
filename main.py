@@ -1167,7 +1167,7 @@ def page_sprints(project, projects):
     sprints = get_sprints(pid)
     section_header("SPRINT BOARD", f"{project['name']}")
 
-    tabs = st.tabs(["OVERVIEW","PLANNING","RETROSPECTIVE","AI FORECAST"])
+    tabs = st.tabs(["OVERVIEW","PLANNING","🔄 RETRO","📅 FORECAST"])
 
     # ── Overview tab ───────────────────────────────────────────
     with tabs[0]:
@@ -1343,7 +1343,7 @@ def page_risks(project, projects):
     c3.metric("MITIGATED", len(mitig_r))
     c4.metric("CLOSED", len(closed_r))
 
-    tabs = st.tabs(["REGISTER","MATRIX","ADD RISK","AI ANALYSIS"])
+    tabs = st.tabs(["REGISTER","MATRIX","ADD RISK","🤖 AI"])
 
     # ── Register tab ───────────────────────────────────────────
     with tabs[0]:
@@ -1573,7 +1573,7 @@ def page_team(project, projects):
         c4.metric("AT RISK",      overloaded+low_morale_n,  f"{overloaded} overloaded · {low_morale_n} morale")
         c5.metric("DAILY COST",   f"${total_daily:,.0f}")
 
-        tabs = st.tabs(["ROSTER","WORKLOAD CHART","EDIT MEMBER","AI INSIGHTS"])
+        tabs = st.tabs(["ROSTER","📊 CHART","✏️ EDIT","🤖 AI"])
 
         with tabs[0]:
             for m in team:
@@ -1683,7 +1683,7 @@ def page_team(project, projects):
 def page_projects(project, projects):
     section_header("PROJECTS","Portfolio overview")
 
-    tabs = st.tabs(["PORTFOLIO","CREATE PROJECT","ACTIVITY LOG"])
+    tabs = st.tabs(["PORTFOLIO","➕ CREATE","ACTIVITY"])
 
     with tabs[0]:
         if not projects:
@@ -1760,130 +1760,179 @@ def page_settings(project, projects):
     budget = cfg["monthly_budget"] if cfg else MONTHLY_BUDGET
     budget_pct = min(100.0, monthly_cost/budget*100) if budget else 0
 
-    tabs = st.tabs(["AI CONFIGURATION","USAGE ANALYTICS","DATA MANAGEMENT"])
+    # Short tab labels — fit on any screen width
+    tabs = st.tabs(["🔑 API", "📊 USAGE", "💾 DATA"])
 
+    # ── Tab 0: API Configuration ───────────────────────────────
     with tabs[0]:
-        st.markdown('<div class="mono-label" style="margin-bottom:12px">API CREDENTIALS</div>', unsafe_allow_html=True)
         if not CRYPTO_AVAILABLE:
-            st.warning("⚠  `cryptography` package not installed — keys stored unencrypted. Run: `pip install cryptography`")
+            st.warning("⚠  `cryptography` not installed — keys stored unencrypted.\n`pip install cryptography`")
 
-        st.info("Get your API key at [platform.deepseek.com](https://platform.deepseek.com). Keys are Fernet-encrypted at rest.", icon="🔑")
+        st.info("Get a free key at [platform.deepseek.com](https://platform.deepseek.com) → API Keys → Create.", icon="🔑")
+
+        has_key = bool(cfg and cfg.get("api_key"))
+        if has_key:
+            st.markdown(f"""
+            <div style="background:#071908;border:1px solid #24a148;border-left:4px solid #24a148;
+                        padding:0.75rem 1rem;margin-bottom:1rem;font-family:'IBM Plex Mono',monospace;font-size:0.8rem">
+                ● AI ACTIVE &nbsp;·&nbsp; Key: {mask_key(cfg['api_key'])} &nbsp;·&nbsp; Model: {cfg.get('model','—')}
+            </div>
+            """, unsafe_allow_html=True)
 
         with st.form("ai_config_form"):
-            c1,c2 = st.columns(2)
-            provider = c1.selectbox("Provider", ["deepseek"])
-            model    = c2.selectbox("Model", ["deepseek-chat","deepseek-coder"],
-                                    index=0 if not cfg else ["deepseek-chat","deepseek-coder"].index(cfg.get("model","deepseek-chat")))
-            base_url = st.text_input("Base URL", value=cfg.get("base_url",DEEPSEEK_URL) if cfg else DEEPSEEK_URL)
-            has_key = bool(cfg and cfg.get("api_key"))
-            api_key = st.text_input("API Key", type="password",
-                                    placeholder=f"sk-... {'(key saved: '+mask_key(cfg['api_key'])+')' if has_key else '(not set)'}",
-                                    autocomplete="off")
+            st.markdown('<div class="mono-label">API KEY</div>', unsafe_allow_html=True)
+            api_key = st.text_input(
+                "API Key", type="password",
+                placeholder="sk-... (leave blank to keep existing)" if has_key else "sk-xxxxxxxxxxxxxxxxxxxx",
+                label_visibility="collapsed",
+                autocomplete="off",
+            )
+
+            st.markdown('<div class="mono-label" style="margin-top:12px">MODEL</div>', unsafe_allow_html=True)
+            model = st.selectbox("Model",
+                ["deepseek-chat","deepseek-coder"],
+                index=0 if not cfg else ["deepseek-chat","deepseek-coder"].index(cfg.get("model","deepseek-chat")),
+                label_visibility="collapsed",
+            )
+
+            st.markdown('<div class="mono-label" style="margin-top:12px">BASE URL</div>', unsafe_allow_html=True)
+            base_url = st.text_input("Base URL",
+                value=cfg.get("base_url", DEEPSEEK_URL) if cfg else DEEPSEEK_URL,
+                label_visibility="collapsed",
+            )
+
+            st.markdown('<div class="mono-label" style="margin-top:12px">MONTHLY BUDGET (USD)</div>', unsafe_allow_html=True)
+            new_budget = st.number_input("Budget", 1.0, 10000.0, float(budget), step=5.0,
+                                         label_visibility="collapsed")
+            st.progress(budget_pct/100,
+                text=f"${monthly_cost:.4f} of ${budget:.2f} used ({budget_pct:.1f}%)")
 
             st.markdown('<div class="mono-label" style="margin-top:12px">ENABLED FEATURES</div>', unsafe_allow_html=True)
-            feat_opts = {"therapy":"Project Health Analysis","simulator":"What-If Simulator",
-                         "insights":"Cross-Project Insights","retro":"Sprint Retrospective",
-                         "risk":"Risk Analysis","forecast":"Delivery Forecast"}
+            feat_opts = {
+                "therapy":   "Health Analysis",
+                "simulator": "What-If Simulator",
+                "insights":  "Portfolio Insights",
+                "retro":     "Retrospective",
+                "risk":      "Risk Analysis",
+                "forecast":  "Delivery Forecast",
+            }
             current = cfg["features"] if cfg else list(feat_opts.keys())
-            fcols = st.columns(3)
             features = []
-            for i,(k,v) in enumerate(feat_opts.items()):
-                if fcols[i%3].checkbox(v, value=k in current, key=f"f_{k}"):
+            # Single-column checkboxes — always readable on mobile
+            for k, v in feat_opts.items():
+                if st.checkbox(v, value=k in current, key=f"f_{k}"):
                     features.append(k)
 
-            st.markdown('<div class="mono-label" style="margin-top:12px">BUDGET CONTROL</div>', unsafe_allow_html=True)
-            new_budget = st.number_input("Monthly Budget (USD)", 1.0, 10000.0, float(budget), step=5.0)
-            st.progress(budget_pct/100, text=f"${monthly_cost:.4f} of ${budget:.2f} used this month ({budget_pct:.1f}%)")
-
-            if st.form_submit_button("SAVE CONFIGURATION"):
+            st.markdown("")
+            if st.form_submit_button("SAVE CONFIGURATION", use_container_width=True):
                 key_to_save = api_key.strip() if api_key and api_key.strip() else (cfg["api_key"] if cfg else "")
                 if not key_to_save:
                     st.error("API key required.")
                 elif not features:
                     st.error("Enable at least one feature.")
                 else:
-                    save_ai_config(provider, key_to_save, model, base_url, new_budget, features)
-                    st.success("✅  Configuration saved."); st.rerun()
+                    save_ai_config("deepseek", key_to_save, model, base_url, new_budget, features)
+                    st.success("✅  Configuration saved.")
+                    st.rerun()
 
         st.markdown("---")
         st.markdown('<div class="mono-label">TEST CONNECTION</div>', unsafe_allow_html=True)
-        c1,c2 = st.columns([3,1])
-        test_key = c1.text_input("Key to test", type="password", key="test_key")
-        if c2.button("TEST", use_container_width=True):
+        test_key = st.text_input("Paste key to test", type="password", key="test_key",
+                                  placeholder="sk-...", label_visibility="collapsed")
+        if st.button("▶  TEST CONNECTION", use_container_width=True):
             if not test_key:
-                st.warning("Enter a key.")
+                st.warning("Paste a key above first.")
             else:
                 with st.spinner("Connecting..."):
-                    ok,msg = test_api_key(test_key, cfg.get("base_url",DEEPSEEK_URL) if cfg else DEEPSEEK_URL)
+                    ok, msg = test_api_key(test_key.strip(),
+                                           cfg.get("base_url", DEEPSEEK_URL) if cfg else DEEPSEEK_URL)
                 (st.success if ok else st.error)(msg)
 
+    # ── Tab 1: Usage Analytics ─────────────────────────────────
     with tabs[1]:
-        # Usage over time
         rows = db_rows("SELECT * FROM ai_usage_log ORDER BY created_at DESC LIMIT 100")
         if rows:
             df_u = pd.DataFrame(rows)
             df_u["created_at"] = pd.to_datetime(df_u["created_at"])
 
-            col1,col2 = st.columns(2)
-            with col1:
-                by_feat = df_u[df_u["success"]==1].groupby("feature")["cost_usd"].sum().reset_index()
-                fig = px.pie(by_feat, values="cost_usd", names="feature", title="COST BY FEATURE",
-                             hole=0.5, color_discrete_sequence=["#0f62fe","#42be65","#ff832b","#f1c21b","#da1e28","#8a3ffc"])
-                fig.update_layout(**plotly_theme())
-                st.plotly_chart(fig,use_container_width=True)
-            with col2:
-                daily = df_u[df_u["success"]==1].groupby(df_u["created_at"].dt.date)["cost_usd"].sum().reset_index()
-                fig2 = px.bar(daily,x="created_at",y="cost_usd",title="DAILY AI COST",
-                              color_discrete_sequence=["#0f62fe"])
-                fig2.update_layout(**plotly_theme(),xaxis_title="",yaxis_title="USD")
-                st.plotly_chart(fig2,use_container_width=True)
+            total_cost   = df_u[df_u["success"]==1]["cost_usd"].sum()
+            total_calls  = len(df_u)
+            success_rate = df_u["success"].mean()*100
 
-            # Table
-            df_display = df_u[["created_at","feature","model","prompt_tokens","completion_tokens","cost_usd","success"]].copy()
+            c1,c2,c3 = st.columns(3)
+            c1.metric("TOTAL COST",   f"${total_cost:.4f}")
+            c2.metric("TOTAL CALLS",  total_calls)
+            c3.metric("SUCCESS RATE", f"{success_rate:.1f}%")
+            st.markdown("")
+
+            # Cost by feature — full width on mobile
+            by_feat = df_u[df_u["success"]==1].groupby("feature")["cost_usd"].sum().reset_index()
+            if not by_feat.empty:
+                fig = px.pie(by_feat, values="cost_usd", names="feature",
+                             title="COST BY FEATURE", hole=0.5,
+                             color_discrete_sequence=["#0f62fe","#42be65","#ff832b","#f1c21b","#da1e28","#8a3ffc"])
+                fig.update_layout(**plotly_theme())
+                st.plotly_chart(fig, use_container_width=True)
+
+            # Daily cost bar
+            daily = df_u[df_u["success"]==1].groupby(df_u["created_at"].dt.date)["cost_usd"].sum().reset_index()
+            if not daily.empty:
+                fig2 = px.bar(daily, x="created_at", y="cost_usd",
+                              title="DAILY AI COST",
+                              color_discrete_sequence=["#0f62fe"])
+                fig2.update_layout(**plotly_theme(), xaxis_title="", yaxis_title="USD")
+                st.plotly_chart(fig2, use_container_width=True)
+
+            # Scrollable log table
+            df_display = df_u[["created_at","feature","cost_usd","success"]].copy()
             df_display["success"] = df_display["success"].map({1:"✓",0:"✗"})
             df_display["cost_usd"] = df_display["cost_usd"].apply(lambda x: f"${x:.6f}")
-            st.dataframe(df_display.head(30),use_container_width=True,hide_index=True)
-
-            total_cost = df_u[df_u["success"]==1]["cost_usd"].sum()
-            total_calls = len(df_u)
-            success_rate = df_u["success"].mean()*100
-            c1,c2,c3 = st.columns(3)
-            c1.metric("TOTAL COST", f"${total_cost:.4f}")
-            c2.metric("TOTAL CALLS", total_calls)
-            c3.metric("SUCCESS RATE", f"{success_rate:.1f}%")
+            df_display.columns = ["When","Feature","Cost","OK"]
+            st.dataframe(df_display.head(30), use_container_width=True, hide_index=True)
         else:
-            st.info("No AI usage recorded yet.")
+            st.info("No AI usage recorded yet. Run an analysis from the AI Assistant page.")
 
+    # ── Tab 2: Data Management ─────────────────────────────────
     with tabs[2]:
-        st.markdown('<div class="mono-label">EXPORT ALL DATA</div>', unsafe_allow_html=True)
         pid = project["id"]
-        team = get_team(pid)
-        sprints = get_sprints(pid)
-        risks = get_risks(pid)
-        entries = get_budget_entries(pid)
+        team_d   = get_team(pid)
+        sprints_d= get_sprints(pid)
+        risks_d  = get_risks(pid)
+        entries_d= get_budget_entries(pid)
 
-        # Stacked full-width buttons — work on any screen size
-        if team:
-            st.download_button("↓ TEAM CSV",    df_to_csv(pd.DataFrame(team)),  "team.csv",    "text/csv", use_container_width=True)
-        if sprints:
-            df_s = pd.DataFrame([{k:v for k,v in s.items() if k not in ("blockers","retro_notes")} for s in sprints])
-            st.download_button("↓ SPRINTS CSV", df_to_csv(df_s),                "sprints.csv", "text/csv", use_container_width=True)
-        if risks:
-            st.download_button("↓ RISKS CSV",   df_to_csv(pd.DataFrame(risks)), "risks.csv",   "text/csv", use_container_width=True)
-        if entries:
-            st.download_button("↓ BUDGET CSV",  df_to_csv(pd.DataFrame(entries)),"budget.csv", "text/csv", use_container_width=True)
+        st.markdown('<div class="mono-label">EXPORT DATA</div>', unsafe_allow_html=True)
+        st.markdown("")
+
+        if team_d:
+            st.download_button("↓  TEAM CSV",    df_to_csv(pd.DataFrame(team_d)),
+                               "team.csv",    "text/csv", use_container_width=True)
+        if sprints_d:
+            df_s = pd.DataFrame([{k:v for k,v in s.items()
+                                   if k not in ("blockers","retro_notes")} for s in sprints_d])
+            st.download_button("↓  SPRINTS CSV", df_to_csv(df_s),
+                               "sprints.csv", "text/csv", use_container_width=True)
+        if risks_d:
+            st.download_button("↓  RISKS CSV",   df_to_csv(pd.DataFrame(risks_d)),
+                               "risks.csv",   "text/csv", use_container_width=True)
+        if entries_d:
+            st.download_button("↓  BUDGET CSV",  df_to_csv(pd.DataFrame(entries_d)),
+                               "budget.csv",  "text/csv", use_container_width=True)
+        if not any([team_d, sprints_d, risks_d, entries_d]):
+            st.info("No data to export yet.")
 
         st.markdown("---")
-        st.markdown('<div class="mono-label" style="color:#da1e28">DANGER ZONE</div>', unsafe_allow_html=True)
-        with st.expander("⚠  DELETE PROJECT DATA"):
-            st.error(f"This will permanently delete ALL data for '{project['name']}' including team, sprints, risks, and budget. This cannot be undone.")
-            confirm = st.text_input("Type the project name to confirm deletion:")
-            if st.button("DELETE PROJECT", type="primary"):
+        st.markdown('<div class="mono-label" style="color:#da1e28">DANGER ZONE</div>',
+                    unsafe_allow_html=True)
+        with st.expander("⚠  DELETE PROJECT"):
+            st.error(f"Permanently deletes ALL data for **{project['name']}**. Cannot be undone.")
+            confirm = st.text_input("Type project name to confirm:", key="delete_confirm")
+            if st.button("DELETE PROJECT", use_container_width=True):
                 if confirm == project["name"]:
                     db_exec("DELETE FROM projects WHERE id=?", (pid,))
-                    st.success("Project deleted. Reloading..."); st.rerun()
+                    st.success("Deleted. Reloading...")
+                    st.rerun()
                 else:
-                    st.error("Project name does not match.")
+                    st.error("Name doesn't match.")
 
 
 # ═════════════════════════════════════════════════════════════════════════════

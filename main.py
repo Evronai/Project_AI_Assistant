@@ -96,18 +96,27 @@ def inject_css():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
 
-    /* ── Global reset ── */
+    /* ═══════════════════════════════════════════════
+       BASE — mobile-first, scaled up for desktop
+    ═══════════════════════════════════════════════ */
     html, body, [class*="css"] {
         font-family: 'IBM Plex Sans', sans-serif !important;
         background-color: #161616 !important;
         color: #f4f4f4 !important;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
     }
 
-    /* ── Main container ── */
+    /* ── Main container — tight on mobile, roomy on desktop ── */
     .main .block-container {
-        padding: 1.5rem 2rem 4rem 2rem !important;
+        padding: 1rem 0.75rem 5rem 0.75rem !important;
         max-width: 1400px !important;
         background: #161616 !important;
+    }
+    @media (min-width: 768px) {
+        .main .block-container {
+            padding: 1.5rem 2rem 4rem 2rem !important;
+        }
     }
 
     /* ── Sidebar ── */
@@ -118,49 +127,75 @@ def inject_css():
     section[data-testid="stSidebar"] * { color: #f4f4f4 !important; }
     section[data-testid="stSidebar"] .stRadio label {
         font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.82rem !important;
+        font-size: 0.9rem !important;        /* larger tap target on mobile */
         letter-spacing: 0.04em !important;
-        padding: 6px 0 !important;
+        padding: 10px 0 !important;          /* 44px min touch target */
+        display: block !important;
     }
 
-    /* ── Page headers ── */
+    /* ── Page headers — scale down on small screens ── */
     h1, h2, h3 {
         font-family: 'IBM Plex Sans', sans-serif !important;
         font-weight: 600 !important;
         letter-spacing: -0.01em !important;
         color: #f4f4f4 !important;
     }
-    h1 { font-size: 2rem !important; border-bottom: 2px solid #0f62fe; padding-bottom: 0.5rem; }
-    h2 { font-size: 1.4rem !important; color: #c6c6c6 !important; }
-    h3 { font-size: 1.1rem !important; color: #a8a8a8 !important; }
+    h1 {
+        font-size: 1.4rem !important;
+        border-bottom: 2px solid #0f62fe;
+        padding-bottom: 0.4rem;
+        word-break: break-word;
+    }
+    h2 { font-size: 1.15rem !important; color: #c6c6c6 !important; }
+    h3 { font-size: 1rem !important;    color: #a8a8a8 !important; }
+    @media (min-width: 768px) {
+        h1 { font-size: 2rem !important; }
+        h2 { font-size: 1.4rem !important; }
+        h3 { font-size: 1.1rem !important; }
+    }
 
-    /* ── Metric cards ── */
+    /* ── Metric cards — compact on mobile ── */
     [data-testid="metric-container"] {
         background: #262626 !important;
         border: 1px solid #393939 !important;
         border-top: 3px solid #0f62fe !important;
-        padding: 1rem !important;
+        padding: 0.6rem 0.5rem !important;
         border-radius: 0 !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
     }
     [data-testid="metric-container"] label {
         font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.72rem !important;
-        letter-spacing: 0.08em !important;
+        font-size: 0.58rem !important;
+        letter-spacing: 0.06em !important;
         text-transform: uppercase !important;
         color: #a8a8a8 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
     }
     [data-testid="metric-container"] [data-testid="stMetricValue"] {
         font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 1.8rem !important;
+        font-size: 1.15rem !important;
         font-weight: 600 !important;
         color: #f4f4f4 !important;
+        white-space: nowrap !important;
     }
     [data-testid="metric-container"] [data-testid="stMetricDelta"] {
         font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.78rem !important;
+        font-size: 0.62rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    @media (min-width: 768px) {
+        [data-testid="metric-container"] { padding: 1rem !important; }
+        [data-testid="metric-container"] label { font-size: 0.72rem !important; }
+        [data-testid="metric-container"] [data-testid="stMetricValue"] { font-size: 1.8rem !important; }
+        [data-testid="metric-container"] [data-testid="stMetricDelta"] { font-size: 0.78rem !important; }
     }
 
-    /* ── Buttons ── */
+    /* ── Buttons — 44px min height for touch targets ── */
     .stButton > button {
         background: #0f62fe !important;
         color: #ffffff !important;
@@ -170,17 +205,27 @@ def inject_css():
         font-weight: 500 !important;
         font-size: 0.875rem !important;
         letter-spacing: 0.01em !important;
-        padding: 0.6rem 1.2rem !important;
+        padding: 0.75rem 1rem !important;
+        min-height: 44px !important;
+        width: 100% !important;             /* full-width by default on mobile */
         transition: background 0.1s !important;
+        -webkit-appearance: none !important;
+        touch-action: manipulation !important;
     }
-    .stButton > button:hover { background: #0043ce !important; }
+    .stButton > button:hover,
+    .stButton > button:active { background: #0043ce !important; }
     .stButton > button[kind="secondary"] {
         background: #393939 !important;
         color: #f4f4f4 !important;
     }
     .stButton > button[kind="secondary"]:hover { background: #525252 !important; }
+    .stButton > button:disabled {
+        background: #262626 !important;
+        color: #525252 !important;
+        cursor: not-allowed !important;
+    }
 
-    /* ── Inputs ── */
+    /* ── Inputs — large enough to avoid iOS zoom (16px min) ── */
     .stTextInput input, .stNumberInput input, .stTextArea textarea,
     .stSelectbox > div > div, .stMultiselect > div > div {
         background: #262626 !important;
@@ -188,31 +233,51 @@ def inject_css():
         border-radius: 0 !important;
         color: #f4f4f4 !important;
         font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.875rem !important;
+        font-size: 16px !important;          /* prevents iOS auto-zoom */
+        min-height: 44px !important;
+        -webkit-appearance: none !important;
+    }
+    @media (min-width: 768px) {
+        .stTextInput input, .stNumberInput input, .stTextArea textarea,
+        .stSelectbox > div > div, .stMultiselect > div > div {
+            font-size: 0.875rem !important;
+        }
     }
     .stTextInput input:focus, .stTextArea textarea:focus {
         border-color: #0f62fe !important;
         box-shadow: inset 0 0 0 2px #0f62fe !important;
+        outline: none !important;
     }
-    label { color: #c6c6c6 !important; font-size: 0.8rem !important; font-weight: 500 !important; }
+    label {
+        color: #c6c6c6 !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
+    }
 
-    /* ── Dataframes ── */
-    .stDataFrame { border: 1px solid #393939 !important; }
+    /* ── Dataframes — horizontal scroll on mobile ── */
+    .stDataFrame {
+        border: 1px solid #393939 !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        display: block !important;
+    }
     .stDataFrame thead tr th {
         background: #393939 !important;
         color: #c6c6c6 !important;
         font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.72rem !important;
-        letter-spacing: 0.06em !important;
+        font-size: 0.65rem !important;
+        letter-spacing: 0.04em !important;
         text-transform: uppercase !important;
         border-bottom: 2px solid #525252 !important;
+        white-space: nowrap !important;
     }
     .stDataFrame tbody tr td {
         background: #262626 !important;
         color: #f4f4f4 !important;
         font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.82rem !important;
+        font-size: 0.75rem !important;
         border-bottom: 1px solid #393939 !important;
+        white-space: nowrap !important;
     }
     .stDataFrame tbody tr:hover td { background: #333333 !important; }
 
@@ -227,30 +292,40 @@ def inject_css():
         font-family: 'IBM Plex Mono', monospace !important;
         font-size: 0.82rem !important;
         letter-spacing: 0.04em !important;
-        padding: 0.8rem 1rem !important;
+        padding: 0.9rem 1rem !important;     /* tall enough to tap comfortably */
         color: #c6c6c6 !important;
         background: #262626 !important;
         border-bottom: 1px solid #393939 !important;
+        min-height: 44px !important;
+        cursor: pointer !important;
     }
 
     /* ── Divider ── */
-    hr { border-color: #393939 !important; margin: 1.5rem 0 !important; }
+    hr { border-color: #393939 !important; margin: 1.25rem 0 !important; }
 
-    /* ── Tabs ── */
+    /* ── Tabs — horizontally scrollable on mobile ── */
     .stTabs [data-baseweb="tab-list"] {
         background: #1e1e1e !important;
         border-bottom: 2px solid #393939 !important;
         gap: 0 !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+        flex-wrap: nowrap !important;
     }
+    .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none !important; }
     .stTabs [data-baseweb="tab"] {
         font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.8rem !important;
-        letter-spacing: 0.04em !important;
+        font-size: 0.72rem !important;
+        letter-spacing: 0.03em !important;
         color: #a8a8a8 !important;
         background: transparent !important;
         border-radius: 0 !important;
-        padding: 0.75rem 1.25rem !important;
+        padding: 0.75rem 0.85rem !important;
         border-bottom: 3px solid transparent !important;
+        white-space: nowrap !important;
+        min-height: 44px !important;
+        flex-shrink: 0 !important;
     }
     .stTabs [aria-selected="true"] {
         color: #f4f4f4 !important;
@@ -259,7 +334,7 @@ def inject_css():
     }
     .stTabs [data-baseweb="tab-panel"] {
         background: #161616 !important;
-        padding-top: 1.5rem !important;
+        padding-top: 1rem !important;
     }
 
     /* ── Progress bars ── */
@@ -274,7 +349,12 @@ def inject_css():
     }
 
     /* ── Alerts ── */
-    .stAlert { border-radius: 0 !important; border-left: 4px solid !important; }
+    .stAlert {
+        border-radius: 0 !important;
+        border-left: 4px solid !important;
+        padding: 0.75rem !important;
+        font-size: 0.875rem !important;
+    }
     .stSuccess { border-left-color: #24a148 !important; background: #0d2e1a !important; }
     .stError   { border-left-color: #da1e28 !important; background: #2d0a0e !important; }
     .stWarning { border-left-color: #f1c21b !important; background: #2c2200 !important; }
@@ -283,28 +363,37 @@ def inject_css():
     /* ── Checkboxes / Radio ── */
     .stCheckbox label, .stRadio label {
         color: #c6c6c6 !important;
-        font-size: 0.875rem !important;
+        font-size: 0.9rem !important;
+        min-height: 36px !important;
+        display: flex !important;
+        align-items: center !important;
     }
 
-    /* ── Slider ── */
+    /* ── Slider — larger thumb for touch ── */
     .stSlider [data-testid="stThumbValue"] {
         font-family: 'IBM Plex Mono', monospace !important;
         font-size: 0.78rem !important;
     }
+    .stSlider [data-baseweb="slider"] [role="slider"] {
+        width: 22px !important;
+        height: 22px !important;
+    }
 
     /* ── Select boxes dropdown ── */
     [data-baseweb="select"] * { background: #262626 !important; color: #f4f4f4 !important; }
-    [data-baseweb="popover"] { background: #262626 !important; border: 1px solid #525252 !important; }
+    [data-baseweb="popover"]  { background: #262626 !important; border: 1px solid #525252 !important; }
+    [data-baseweb="menu"] li  { min-height: 44px !important; }  /* tap-friendly dropdown rows */
 
     /* ── IBM tag styles ── */
     .ibm-tag {
         display: inline-block;
         font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         letter-spacing: 0.04em;
-        padding: 2px 8px;
-        margin: 1px 2px;
+        padding: 3px 7px;
+        margin: 2px 2px;
         border: 1px solid;
+        white-space: nowrap;
     }
     .ibm-tag-blue   { background: #001d6c; border-color: #0f62fe; color: #78a9ff; }
     .ibm-tag-green  { background: #071908; border-color: #24a148; color: #42be65; }
@@ -318,53 +407,109 @@ def inject_css():
         background: #262626;
         border: 1px solid #393939;
         border-top: 3px solid #0f62fe;
-        padding: 1.25rem 1.5rem;
+        padding: 1rem;
         margin-bottom: 1rem;
     }
-    .carbon-card-red  { border-top-color: #da1e28 !important; }
-    .carbon-card-green{ border-top-color: #24a148 !important; }
-    .carbon-card-yellow{ border-top-color: #f1c21b !important; }
+    @media (min-width: 768px) {
+        .carbon-card { padding: 1.25rem 1.5rem; }
+    }
+    .carbon-card-red    { border-top-color: #da1e28 !important; }
+    .carbon-card-green  { border-top-color: #24a148 !important; }
+    .carbon-card-yellow { border-top-color: #f1c21b !important; }
 
     /* ── Mono labels ── */
     .mono-label {
         font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         letter-spacing: 0.1em;
         text-transform: uppercase;
         color: #a8a8a8;
         margin-bottom: 4px;
     }
+    @media (min-width: 768px) {
+        .mono-label { font-size: 0.7rem; }
+    }
     .mono-value {
         font-family: 'IBM Plex Mono', monospace;
-        font-size: 1.4rem;
+        font-size: 1.2rem;
         font-weight: 600;
         color: #f4f4f4;
     }
 
-    /* ── Risk matrix cell ── */
+    /* ── Risk matrix — horizontally scrollable on mobile ── */
+    .risk-matrix-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
     .risk-cell {
         display: inline-block;
-        width: 52px; height: 52px;
-        line-height: 52px;
+        width: 44px; height: 44px;
+        line-height: 44px;
         text-align: center;
         font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         font-weight: 600;
         border: 1px solid #393939;
     }
 
+    /* ── Feature header cards — full-width on mobile ── */
+    .feature-header-card {
+        background: #1e2a3a;
+        border: 1px solid #0f62fe;
+        border-top: 3px solid #0f62fe;
+        padding: 0.875rem 1rem 0.5rem 1rem;
+        margin-bottom: 0;
+    }
+
+    /* ── Streamlit column gap — reduce on mobile ── */
+    [data-testid="column"] {
+        padding-left: 0.25rem !important;
+        padding-right: 0.25rem !important;
+    }
+    @media (min-width: 768px) {
+        [data-testid="column"] {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+    }
+
+    /* ── Plotly charts — full width, no overflow ── */
+    .js-plotly-plot, .plotly {
+        max-width: 100% !important;
+        overflow: hidden !important;
+    }
+
     /* ── Scrollable code block ── */
-    .stCodeBlock { border-radius: 0 !important; }
+    .stCodeBlock {
+        border-radius: 0 !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
 
     /* ── Form submit btn ── */
     .stForm [data-testid="stFormSubmitButton"] button {
         background: #24a148 !important;
         width: 100% !important;
+        min-height: 48px !important;
+        font-size: 1rem !important;
     }
     .stForm [data-testid="stFormSubmitButton"] button:hover { background: #198038 !important; }
 
+    /* ── Number input spinners — bigger on mobile ── */
+    .stNumberInput button {
+        min-width: 36px !important;
+        min-height: 44px !important;
+    }
+
+    /* ── Spinner text ── */
+    .stSpinner > div { font-family: 'IBM Plex Mono', monospace !important; font-size: 0.8rem !important; }
+
     /* ── Hide streamlit branding ── */
     #MainMenu, footer, header { visibility: hidden !important; }
+
+    /* ── Safe area inset for iPhone notch / home bar ── */
+    .main { padding-bottom: env(safe-area-inset-bottom, 0) !important; }
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -871,14 +1016,17 @@ def page_dashboard(project, projects):
     )
     st.markdown("")
 
-    # KPI row
-    c1,c2,c3,c4,c5,c6 = st.columns(6)
-    c1.metric("VELOCITY", f"{avg_velocity:.0f} pts", f"Sprint avg")
-    c2.metric("MORALE", f"{avg_morale:.0f}/100", f"{'↑ Good' if avg_morale>70 else '↓ At risk'}")
-    c3.metric("WORKLOAD", f"{avg_workload:.0f}%", f"{'↑ Overloaded' if avg_workload>85 else 'Nominal'}", delta_color="inverse" if avg_workload>85 else "normal")
-    c4.metric("OPEN RISKS", str(open_risks), f"{'⚠ Needs attention' if open_risks>3 else 'Managed'}", delta_color="inverse" if open_risks>3 else "off")
-    c5.metric("BUDGET USED", f"{budget_pct:.0f}%", f"${total_expense:,.0f} of ${project['budget']:,.0f}")
-    c6.metric("AI SPEND MTD", f"${monthly_cost:.4f}", f"${budget-monthly_cost:.2f} left")
+    # KPI row — 3 cols on mobile, 6 on desktop via two rows
+    c1,c2,c3 = st.columns(3)
+    c1.metric("VELOCITY",     f"{avg_velocity:.0f} pts", "Sprint avg")
+    c2.metric("MORALE",       f"{avg_morale:.0f}/100",   f"{'↑ Good' if avg_morale>70 else '↓ Risk'}")
+    c3.metric("WORKLOAD",     f"{avg_workload:.0f}%",    f"{'↑ High' if avg_workload>85 else 'OK'}",
+              delta_color="inverse" if avg_workload>85 else "normal")
+    c4,c5,c6 = st.columns(3)
+    c4.metric("OPEN RISKS",   str(open_risks),           f"{'⚠ Review' if open_risks>3 else 'OK'}",
+              delta_color="inverse" if open_risks>3 else "off")
+    c5.metric("BUDGET",       f"{budget_pct:.0f}%",      f"${total_expense:,.0f} used")
+    c6.metric("AI SPEND",     f"${monthly_cost:.4f}",    f"${budget-monthly_cost:.2f} left")
 
     st.markdown("---")
 
@@ -978,10 +1126,9 @@ def page_dashboard(project, projects):
     p_ctx = {k: project[k] for k in ("name","status","team_size","velocity","budget")}
 
     if ai_gate("DASHBOARD AI ANALYSIS"):
-        b1,b2,b3 = st.columns(3)
-        run_health = b1.button("HEALTH ANALYSIS",   use_container_width=True)
-        run_sim    = b2.button("SCENARIO FORECAST", use_container_width=True)
-        run_risk   = b3.button("RISK ANALYSIS",     use_container_width=True)
+        run_health = st.button("▶  HEALTH ANALYSIS",   use_container_width=True, key="dash_health")
+        run_sim    = st.button("▶  SCENARIO FORECAST", use_container_width=True, key="dash_sim")
+        run_risk   = st.button("▶  RISK ANALYSIS",     use_container_width=True, key="dash_risk")
 
         if run_health:
             with st.spinner("Analysing..."):
@@ -1189,9 +1336,10 @@ def page_risks(project, projects):
     closed_r  = [r for r in risks if r["status"]=="closed"]
     critical_r = [r for r in open_r if r["probability"]*r["impact"]>=12]
 
-    c1,c2,c3,c4 = st.columns(4)
+    c1,c2 = st.columns(2)
     c1.metric("TOTAL RISKS", len(risks))
     c2.metric("OPEN", len(open_r), delta=f"{len(critical_r)} critical", delta_color="inverse" if critical_r else "off")
+    c3,c4 = st.columns(2)
     c3.metric("MITIGATED", len(mitig_r))
     c4.metric("CLOSED", len(closed_r))
 
@@ -1314,11 +1462,14 @@ def page_budget(project, projects):
     remaining = budget - total_expense + total_income
     budget_pct = total_expense/budget*100 if budget else 0
 
-    c1,c2,c3,c4 = st.columns(4)
+    c1,c2 = st.columns(2)
     c1.metric("TOTAL BUDGET",  f"${budget:,.0f}")
-    c2.metric("TOTAL SPEND",   f"${total_expense:,.0f}", f"{budget_pct:.1f}% used", delta_color="inverse" if budget_pct>90 else "off")
+    c2.metric("TOTAL SPEND",   f"${total_expense:,.0f}", f"{budget_pct:.1f}% used",
+              delta_color="inverse" if budget_pct>90 else "off")
+    c3,c4 = st.columns(2)
     c3.metric("INCOME",        f"${total_income:,.0f}")
-    c4.metric("NET REMAINING", f"${remaining:,.0f}", delta_color="inverse" if remaining<0 else "normal")
+    c4.metric("NET REMAINING", f"${remaining:,.0f}",
+              delta_color="inverse" if remaining<0 else "normal")
 
     pct_clamped = min(100,budget_pct)
     bar_color = "#da1e28" if budget_pct>90 else "#ff832b" if budget_pct>75 else "#0f62fe"
@@ -1414,11 +1565,12 @@ def page_team(project, projects):
         low_morale_n = sum(1 for m in team if m["morale"]<60)
         total_daily  = sum(m.get("daily_rate",0) for m in team)
 
-        c1,c2,c3,c4,c5 = st.columns(5)
+        c1,c2,c3 = st.columns(3)
         c1.metric("HEADCOUNT",    len(team))
-        c2.metric("AVG MORALE",   f"{avg_morale:.0f}/100", f"{'↑ Good' if avg_morale>70 else '↓ Risk'}")
-        c3.metric("AVG WORKLOAD", f"{avg_workload:.0f}%",  delta_color="inverse" if avg_workload>85 else "normal")
-        c4.metric("AT RISK",      overloaded+low_morale_n, f"{overloaded} overloaded · {low_morale_n} morale")
+        c2.metric("AVG MORALE",   f"{avg_morale:.0f}/100",  f"{'↑ Good' if avg_morale>70 else '↓ Risk'}")
+        c3.metric("AVG WORKLOAD", f"{avg_workload:.0f}%",   delta_color="inverse" if avg_workload>85 else "normal")
+        c4,c5 = st.columns(2)
+        c4.metric("AT RISK",      overloaded+low_morale_n,  f"{overloaded} overloaded · {low_morale_n} morale")
         c5.metric("DAILY COST",   f"${total_daily:,.0f}")
 
         tabs = st.tabs(["ROSTER","WORKLOAD CHART","EDIT MEMBER","AI INSIGHTS"])
@@ -1705,21 +1857,21 @@ def page_settings(project, projects):
     with tabs[2]:
         st.markdown('<div class="mono-label">EXPORT ALL DATA</div>', unsafe_allow_html=True)
         pid = project["id"]
-        col1,col2,col3 = st.columns(3)
         team = get_team(pid)
         sprints = get_sprints(pid)
         risks = get_risks(pid)
         entries = get_budget_entries(pid)
 
+        # Stacked full-width buttons — work on any screen size
         if team:
-            col1.download_button("↓ TEAM CSV", df_to_csv(pd.DataFrame(team)), "team.csv","text/csv",use_container_width=True)
+            st.download_button("↓ TEAM CSV",    df_to_csv(pd.DataFrame(team)),  "team.csv",    "text/csv", use_container_width=True)
         if sprints:
             df_s = pd.DataFrame([{k:v for k,v in s.items() if k not in ("blockers","retro_notes")} for s in sprints])
-            col2.download_button("↓ SPRINTS CSV", df_to_csv(df_s), "sprints.csv","text/csv",use_container_width=True)
+            st.download_button("↓ SPRINTS CSV", df_to_csv(df_s),                "sprints.csv", "text/csv", use_container_width=True)
         if risks:
-            col3.download_button("↓ RISKS CSV", df_to_csv(pd.DataFrame(risks)), "risks.csv","text/csv",use_container_width=True)
+            st.download_button("↓ RISKS CSV",   df_to_csv(pd.DataFrame(risks)), "risks.csv",   "text/csv", use_container_width=True)
         if entries:
-            st.download_button("↓ BUDGET CSV", df_to_csv(pd.DataFrame(entries)), "budget.csv","text/csv",use_container_width=True)
+            st.download_button("↓ BUDGET CSV",  df_to_csv(pd.DataFrame(entries)),"budget.csv", "text/csv", use_container_width=True)
 
         st.markdown("---")
         st.markdown('<div class="mono-label" style="color:#da1e28">DANGER ZONE</div>', unsafe_allow_html=True)

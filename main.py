@@ -510,34 +510,7 @@ def inject_css():
     /* ── Safe area inset ── */
     .main { padding-bottom: env(safe-area-inset-bottom, 0) !important; }
 
-    /* ── Mobile nav bar: icon buttons at top of main area ── */
-    /* Hide on desktop */
-    @media (min-width: 768px) {
-        .mobile-nav-wrap { display: none !important; }
-        .mobile-nav-wrap + hr { display: none !important; }
-    }
-    /* Style on mobile */
-    @media (max-width: 767px) {
-        .mobile-nav-wrap [data-testid="column"] {
-            padding-left: 1px !important;
-            padding-right: 1px !important;
-        }
-        .mobile-nav-wrap .stButton > button {
-            background: #1e1e1e !important;
-            color: #c6c6c6 !important;
-            border: 1px solid #393939 !important;
-            border-radius: 0 !important;
-            font-size: 1.1rem !important;
-            padding: 0.5rem 0 !important;
-            min-height: 44px !important;
-            width: 100% !important;
-            line-height: 1 !important;
-        }
-        .mobile-nav-wrap .stButton > button:active {
-            background: #0f62fe !important;
-            color: #fff !important;
-        }
-    }
+
 
     </style>
     """, unsafe_allow_html=True)
@@ -2304,15 +2277,9 @@ def page_ai_assistant(project, projects):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# MOBILE NAV — Streamlit-native top bar, works everywhere
+# NAV BAR — always-visible compact row of st.buttons, works on all screens
 # ═════════════════════════════════════════════════════════════════════════════
-def render_mobile_nav(current_page: str):
-    """
-    Horizontal scrollable nav bar using real st.button widgets.
-    Shown at the top of the main area on all screen sizes as a fallback,
-    but styled to be compact. No JS, no iframes, no fixed positioning.
-    Only rendered on mobile (hidden on desktop via CSS media query on the wrapper).
-    """
+def render_nav_bar(current_page: str):
     NAV = [
         ("🏠", "DASHBOARD"),
         ("🤖", "⬡ AI ASSISTANT"),
@@ -2323,18 +2290,19 @@ def render_mobile_nav(current_page: str):
         ("📁", "PROJECTS"),
         ("⚙️", "SETTINGS"),
     ]
-
-    # Wrap in a div that CSS can target — hide on desktop
-    st.markdown('''<div class="mobile-nav-wrap">''', unsafe_allow_html=True)
     cols = st.columns(len(NAV))
     for col, (icon, page_key) in zip(cols, NAV):
-        label = f"{icon}"
-        if col.button(label, key=f"mnav_{page_key.replace(' ','_').replace('⬡','ai')}",
-                      use_container_width=True,
-                      help=page_key):
+        is_active = current_page == page_key
+        # Show active page with filled background via type
+        if col.button(
+            icon,
+            key=f"nav_{page_key}",
+            use_container_width=True,
+            type="primary" if is_active else "secondary",
+            help=page_key,
+        ):
             st.session_state["current_page"] = page_key
             st.rerun()
-    st.markdown('''</div>''', unsafe_allow_html=True)
 
 
 def main():
@@ -2473,7 +2441,7 @@ def main():
         "SETTINGS":        page_settings,
     }
     # ── Mobile nav bar — shown at top on mobile, hidden on desktop ──
-    render_mobile_nav(page)
+    render_nav_bar(page)
     st.markdown("---")
 
     pages[page](project, projects)

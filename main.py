@@ -2006,7 +2006,7 @@ def page_ai_assistant(project, projects):
     if not ai_ready:
         st.warning("⚡ AI not configured. Go to **SETTINGS → 🔑 API CONFIG** to add your DeepSeek key.")
         if st.button("→ GO TO SETTINGS", key="ai_goto_settings", use_container_width=True):
-            st.session_state["sidebar_nav"] = "SETTINGS"
+            st.session_state["main_nav"] = "SETTINGS"
             st.rerun()
         st.markdown("---")
 
@@ -2288,121 +2288,108 @@ def main():
     init_db()
     seed_if_empty()
 
-    # ── Sidebar ───────────────────────────────────────────────
+    # ── Navigation: in main area, works on all devices ──────────
+    NAV_PAGES = [
+        "DASHBOARD", "⬡ AI ASSISTANT", "SPRINT BOARD",
+        "RISK REGISTER", "BUDGET", "TEAM", "PROJECTS", "SETTINGS",
+    ]
+
+    # Project selector (renders in sidebar via select_project())
+    project, projects = select_project()
+    if not project:
+        st.warning("No projects found.")
+        st.stop()
+
+    # ── Navigation selectbox — the ONLY nav widget, works on all devices ──
+    # Let the selectbox own its own state via key "main_nav".
+    # We initialise it once then read it every run. No index= override.
+    if "main_nav" not in st.session_state:
+        st.session_state["main_nav"] = "DASHBOARD"
+
+    col_nav, col_status = st.columns([3, 1])
+    with col_nav:
+        st.selectbox(
+            "Navigate",
+            NAV_PAGES,
+            key="main_nav",
+            label_visibility="collapsed",
+        )
+
+    page = st.session_state["main_nav"]
+
+    with col_status:
+        cfg_s = get_ai_config()
+        ai_ok = bool(cfg_s and cfg_s.get("api_key"))
+        st.markdown(
+            f'''<div style="font-family:IBM Plex Mono,monospace;font-size:0.72rem;
+                          text-align:right;padding-top:0.5rem;
+                          color:{"#42be65" if ai_ok else "#da1e28"}">
+                {"● AI READY" if ai_ok else "● AI OFFLINE"}</div>''',
+            unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # ── Sidebar: status only, no nav ──────────────────────────
     with st.sidebar:
         st.markdown(f"""
-        <div style="padding:1rem 0 0.5rem 0">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:1.1rem;font-weight:600;color:#f4f4f4;letter-spacing:0.05em">
+        <div style="padding:0.5rem 0">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:1rem;
+                        font-weight:600;color:#f4f4f4;letter-spacing:0.05em">
                 {APP_TITLE.upper()}
             </div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:#525252;letter-spacing:0.12em">
-                v{APP_VERSION}
-            </div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;
+                        color:#525252;letter-spacing:0.1em">v{APP_VERSION}</div>
         </div>
         """, unsafe_allow_html=True)
 
-        project, projects = select_project()
-        if not project:
-            st.warning("No projects found.")
-            st.stop()
-
         st.markdown("---")
-
-        NAV_PAGES = [
-            "DASHBOARD",
-            "⬡ AI ASSISTANT",
-            "SPRINT BOARD",
-            "RISK REGISTER",
-            "BUDGET",
-            "TEAM",
-            "PROJECTS",
-            "SETTINGS",
-        ]
-
-        # Persist page selection across sidebar collapse/expand on mobile.
-        # st.radio resets to index 0 when the sidebar is toggled.
-        # We store the real selection in session_state["current_page"] and
-        # sync the radio to it — so collapsing the sidebar never loses your page.
-        if "current_page" not in st.session_state:
-            st.session_state["current_page"] = "DASHBOARD"
-
-        # Another part of the app may have set sidebar_nav to request a page jump
-        if "sidebar_nav" in st.session_state and st.session_state["sidebar_nav"] in NAV_PAGES:
-            st.session_state["current_page"] = st.session_state["sidebar_nav"]
-            del st.session_state["sidebar_nav"]
-
-        current_idx = NAV_PAGES.index(st.session_state["current_page"])
-
-        selected = st.radio(
-            "",
-            NAV_PAGES,
-            index=current_idx,
-            label_visibility="collapsed",
-            key="nav_radio",
-        )
-
-        # Update persistent state and rerun when user changes selection
-        if selected != st.session_state["current_page"]:
-            st.session_state["current_page"] = selected
-            st.rerun()
-
-        page = st.session_state["current_page"]
-
-        st.markdown("---")
-        # Status panel
-        cfg = get_ai_config()
-        ai_ok = bool(cfg and cfg.get("api_key"))
+        cfg2 = get_ai_config()
+        ai_ok2 = bool(cfg2 and cfg2.get("api_key"))
         monthly_cost = get_monthly_cost()
-        budget = cfg["monthly_budget"] if cfg else MONTHLY_BUDGET
+        budget = cfg2["monthly_budget"] if cfg2 else MONTHLY_BUDGET
         budget_pct_side = min(100, monthly_cost/budget*100) if budget else 0
 
         st.markdown(f"""
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:#525252;letter-spacing:0.08em;margin-bottom:8px">SYSTEM STATUS</div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:{'#42be65' if ai_ok else '#da1e28'};margin-bottom:4px">
-            {'● AI READY' if ai_ok else '● AI OFFLINE'}
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;
+                    color:#525252;letter-spacing:0.08em;margin-bottom:6px">SYSTEM STATUS</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;
+                    color:{'#42be65' if ai_ok2 else '#da1e28'};margin-bottom:3px">
+            {'● AI READY' if ai_ok2 else '● AI OFFLINE'}
         </div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:#42be65;margin-bottom:4px">
-            ● DB CONNECTED
-        </div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:#a8a8a8;margin-top:8px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;
+                    color:#42be65;margin-bottom:3px">● DB CONNECTED</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;
+                    color:#a8a8a8;margin-top:6px">
             AI BUDGET: ${monthly_cost:.4f} / ${budget:.2f}
         </div>
         <div style="background:#393939;height:3px;margin-top:4px">
-            <div style="background:{'#da1e28' if budget_pct_side>90 else '#f1c21b' if budget_pct_side>70 else '#0f62fe'};height:3px;width:{budget_pct_side:.0f}%"></div>
+            <div style="background:{'#da1e28' if budget_pct_side>90 else '#f1c21b' if budget_pct_side>70 else '#0f62fe'};
+                        height:3px;width:{budget_pct_side:.0f}%"></div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Sidebar quick-setup when AI not configured
-        if not ai_ok:
+        if not ai_ok2:
             st.markdown("---")
-            st.markdown('<div style="font-family:IBM Plex Mono,monospace;font-size:0.7rem;letter-spacing:0.08em;color:#f1c21b;margin-bottom:6px">⚡ QUICK SETUP</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-family:IBM Plex Mono,monospace;font-size:0.68rem;letter-spacing:0.08em;color:#f1c21b;margin-bottom:4px">⚡ QUICK SETUP</div>', unsafe_allow_html=True)
             with st.form("sidebar_ai_setup"):
-                sb_key = st.text_input("DeepSeek API Key", type="password",
+                sb_key = st.text_input("API Key", type="password",
                                        placeholder="sk-...",
-                                       label_visibility="collapsed",
-                                       help="Get free key at platform.deepseek.com")
+                                       label_visibility="collapsed")
                 if st.form_submit_button("ACTIVATE AI", use_container_width=True):
-                    if not sb_key.strip():
-                        st.error("Enter API key")
-                    elif not sb_key.strip().startswith("sk-"):
-                        st.error("Must start with sk-")
-                    else:
-                        with st.spinner("Connecting..."):
+                    if sb_key.strip().startswith("sk-"):
+                        with st.spinner("Testing..."):
                             ok, msg = test_api_key(sb_key.strip(), DEEPSEEK_URL)
                         if ok:
                             save_ai_config("deepseek", sb_key.strip(), "deepseek-chat",
                                            DEEPSEEK_URL, MONTHLY_BUDGET,
                                            ["therapy","simulator","insights","retro","risk","forecast"])
-                            st.success("✅ AI activated!")
                             st.rerun()
                         else:
                             st.error(msg)
-            st.markdown('<div style="font-family:IBM Plex Mono,monospace;font-size:0.68rem;color:#525252">platform.deepseek.com → API Keys</div>', unsafe_allow_html=True)
+                    else:
+                        st.error("Key must start with sk-")
 
-        if not CRYPTO_AVAILABLE:
-            st.markdown('<div style="font-family:IBM Plex Mono,monospace;font-size:0.7rem;color:#f1c21b;margin-top:8px">⚠ cryptography not installed</div>', unsafe_allow_html=True)
-
-    # ── Route ─────────────────────────────────────────────────
+    # ── Route to page ─────────────────────────────────────────
     pages = {
         "DASHBOARD":       page_dashboard,
         "⬡ AI ASSISTANT":  page_ai_assistant,
@@ -2413,20 +2400,6 @@ def main():
         "PROJECTS":        page_projects,
         "SETTINGS":        page_settings,
     }
-    # ── Page selector: visible on mobile when sidebar is hidden ──
-    with st.expander(f"📍 {page}  ▸  tap to navigate", expanded=False):
-        NAV_OPTS = [
-            "DASHBOARD", "⬡ AI ASSISTANT", "SPRINT BOARD",
-            "RISK REGISTER", "BUDGET", "TEAM", "PROJECTS", "SETTINGS",
-        ]
-        chosen = st.selectbox("Go to page", NAV_OPTS,
-                              index=NAV_OPTS.index(page),
-                              key="top_nav_select",
-                              label_visibility="collapsed")
-        if st.button("GO  →", key="top_nav_go", use_container_width=True):
-            st.session_state["current_page"] = chosen
-            st.rerun()
-
     pages[page](project, projects)
 
 

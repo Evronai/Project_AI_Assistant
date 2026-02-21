@@ -2276,41 +2276,13 @@ def page_ai_assistant(project, projects):
         render_ai_result(resp, f"🔗 {project['name']} vs {compare_to}")
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# NAV BAR — always-visible compact row of st.buttons, works on all screens
-# ═════════════════════════════════════════════════════════════════════════════
-def render_nav_bar(current_page: str):
-    NAV = [
-        ("🏠", "DASHBOARD"),
-        ("🤖", "⬡ AI ASSISTANT"),
-        ("🏃", "SPRINT BOARD"),
-        ("⚠️", "RISK REGISTER"),
-        ("💰", "BUDGET"),
-        ("👥", "TEAM"),
-        ("📁", "PROJECTS"),
-        ("⚙️", "SETTINGS"),
-    ]
-    cols = st.columns(len(NAV))
-    for col, (icon, page_key) in zip(cols, NAV):
-        is_active = current_page == page_key
-        # Show active page with filled background via type
-        if col.button(
-            icon,
-            key=f"nav_{page_key}",
-            use_container_width=True,
-            type="primary" if is_active else "secondary",
-            help=page_key,
-        ):
-            st.session_state["current_page"] = page_key
-            st.rerun()
-
 
 def main():
     st.set_page_config(
         page_title=APP_TITLE,
         page_icon="⬛",
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="auto",
     )
     inject_css()
     init_db()
@@ -2369,9 +2341,10 @@ def main():
             key="nav_radio",
         )
 
-        # Update persistent state when user changes selection
+        # Update persistent state and rerun when user changes selection
         if selected != st.session_state["current_page"]:
             st.session_state["current_page"] = selected
+            st.rerun()
 
         page = st.session_state["current_page"]
 
@@ -2440,9 +2413,19 @@ def main():
         "PROJECTS":        page_projects,
         "SETTINGS":        page_settings,
     }
-    # ── Mobile nav bar — shown at top on mobile, hidden on desktop ──
-    render_nav_bar(page)
-    st.markdown("---")
+    # ── Page selector: visible on mobile when sidebar is hidden ──
+    with st.expander(f"📍 {page}  ▸  tap to navigate", expanded=False):
+        NAV_OPTS = [
+            "DASHBOARD", "⬡ AI ASSISTANT", "SPRINT BOARD",
+            "RISK REGISTER", "BUDGET", "TEAM", "PROJECTS", "SETTINGS",
+        ]
+        chosen = st.selectbox("Go to page", NAV_OPTS,
+                              index=NAV_OPTS.index(page),
+                              key="top_nav_select",
+                              label_visibility="collapsed")
+        if st.button("GO  →", key="top_nav_go", use_container_width=True):
+            st.session_state["current_page"] = chosen
+            st.rerun()
 
     pages[page](project, projects)
 

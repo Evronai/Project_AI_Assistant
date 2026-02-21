@@ -2304,7 +2304,8 @@ def main():
             st.stop()
 
         st.markdown("---")
-        page = st.radio("", [
+
+        NAV_PAGES = [
             "DASHBOARD",
             "⬡ AI ASSISTANT",
             "SPRINT BOARD",
@@ -2313,7 +2314,35 @@ def main():
             "TEAM",
             "PROJECTS",
             "SETTINGS",
-        ], label_visibility="collapsed", key="sidebar_nav")
+        ]
+
+        # Persist page selection across sidebar collapse/expand on mobile.
+        # st.radio resets to index 0 when the sidebar is toggled.
+        # We store the real selection in session_state["current_page"] and
+        # sync the radio to it — so collapsing the sidebar never loses your page.
+        if "current_page" not in st.session_state:
+            st.session_state["current_page"] = "DASHBOARD"
+
+        # Another part of the app may have set sidebar_nav to request a page jump
+        if "sidebar_nav" in st.session_state and st.session_state["sidebar_nav"] in NAV_PAGES:
+            st.session_state["current_page"] = st.session_state["sidebar_nav"]
+            del st.session_state["sidebar_nav"]
+
+        current_idx = NAV_PAGES.index(st.session_state["current_page"])
+
+        selected = st.radio(
+            "",
+            NAV_PAGES,
+            index=current_idx,
+            label_visibility="collapsed",
+            key="nav_radio",
+        )
+
+        # Update persistent state when user changes selection
+        if selected != st.session_state["current_page"]:
+            st.session_state["current_page"] = selected
+
+        page = st.session_state["current_page"]
 
         st.markdown("---")
         # Status panel

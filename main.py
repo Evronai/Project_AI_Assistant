@@ -507,8 +507,62 @@ def inject_css():
     /* ── Hide streamlit branding ── */
     #MainMenu, footer, header { visibility: hidden !important; }
 
-    /* ── Safe area inset for iPhone notch / home bar ── */
-    .main { padding-bottom: env(safe-area-inset-bottom, 0) !important; }
+    /* ══════════════════════════════
+       MOBILE BOTTOM NAV BAR
+    ══════════════════════════════ */
+    #mobile-nav { display: none; }
+
+    @media (max-width: 767px) {
+        .main .block-container { padding-bottom: 80px !important; }
+
+        #mobile-nav {
+            display: flex !important;
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 9999;
+            background: #0f0f0f;
+            border-top: 2px solid #0f62fe;
+            height: 58px;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        #mobile-nav::-webkit-scrollbar { display: none; }
+
+        .mnav-btn {
+            flex: 1 1 0;
+            min-width: 52px;
+            height: 58px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            background: none;
+            border: none;
+            border-right: 1px solid #1a1a1a;
+            cursor: pointer;
+            padding: 0 4px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        .mnav-btn:active, .mnav-btn.active { background: #1a2640; }
+        .mnav-icon  { font-size: 1rem; line-height: 1; }
+        .mnav-label {
+            font-family: IBM Plex Mono, monospace;
+            font-size: 0.48rem;
+            letter-spacing: 0.02em;
+            color: #a8a8a8;
+            white-space: nowrap;
+            text-transform: uppercase;
+        }
+        .mnav-btn.active .mnav-label { color: #78a9ff; }
+    }
+
+    @media (min-width: 768px) {
+        .main { padding-bottom: env(safe-area-inset-bottom, 0) !important; }
+    }
 
     </style>
     """, unsafe_allow_html=True)
@@ -2274,6 +2328,78 @@ def page_ai_assistant(project, projects):
         render_ai_result(resp, f"🔗 {project['name']} vs {compare_to}")
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# MOBILE BOTTOM NAV BAR
+# ═════════════════════════════════════════════════════════════════════════════
+def render_mobile_nav(current_page: str):
+    """
+    Renders a fixed bottom navigation bar visible only on mobile (<768px).
+    Uses Streamlit query params to switch pages without touching the sidebar.
+    Each button POSTs to ?nav=PAGE via a tiny inline script so no page reload.
+    """
+    NAV = [
+        ("🏠", "DASH",      "DASHBOARD"),
+        ("🤖", "AI",        "⬡ AI ASSISTANT"),
+        ("🏃", "SPRINTS",   "SPRINT BOARD"),
+        ("⚠️", "RISKS",     "RISK REGISTER"),
+        ("💰", "BUDGET",    "BUDGET"),
+        ("👥", "TEAM",      "TEAM"),
+        ("📁", "PROJECTS",  "PROJECTS"),
+        ("⚙️", "SETTINGS",  "SETTINGS"),
+    ]
+
+    buttons_html = ""
+    for icon, label, page_key in NAV:
+        active = "active" if current_page == page_key else ""
+        # data-page encodes the full page name; JS picks it up
+        safe = page_key.replace("'", "\'")
+        buttons_html += (
+            f'<button class="mnav-btn {active}" '
+            f'onclick="window.parent.postMessage({{type:\'streamlit:setComponentValue\','
+            f'value:\'{safe}\'}}, \'*\'); '
+            f'document.querySelectorAll(\'.mnav-btn\').forEach(b=>b.classList.remove(\'active\')); '
+            f'this.classList.add(\'active\');" '
+            f'aria-label="{page_key}">'
+            f'<span class="mnav-icon">{icon}</span>'
+            f'<span class="mnav-label">{label}</span>'
+            f'</button>'
+        )
+
+    # Use Streamlit query_params to communicate page changes
+    # Each button sets window.location search param then the page reads it
+    NAV_JS = []
+    for icon, label, page_key in NAV:
+        active_cls = "active" if current_page == page_key else ""
+        safe_key = page_key.replace('"', "&quot;")
+        NAV_JS.append(
+            f'<button class="mnav-btn {active_cls}" '
+            f'onclick="setNavPage(this, \'{safe_key}\')" '
+            f'aria-label="{safe_key}">'
+            f'<span class="mnav-icon">{icon}</span>'
+            f'<span class="mnav-label">{label}</span>'
+            f'</button>'
+        )
+
+    btns = "\n".join(NAV_JS)
+
+    st.markdown(f"""
+    <div id="mobile-nav">
+        {btns}
+    </div>
+    <script>
+    function setNavPage(btn, page) {{
+        // Update active state visually immediately
+        document.querySelectorAll('.mnav-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        // Set query param — Streamlit watches this and reruns
+        const url = new URL(window.location.href);
+        url.searchParams.set('nav_page', encodeURIComponent(page));
+        window.location.href = url.toString();
+    }}
+    </script>
+    """, unsafe_allow_html=True)
+
+
 def main():
     st.set_page_config(
         page_title=APP_TITLE,
@@ -2284,6 +2410,20 @@ def main():
     inject_css()
     init_db()
     seed_if_empty()
+
+    # ── Mobile nav: read query param set by bottom nav bar ────
+    NAV_VALID = {
+        "DASHBOARD", "⬡ AI ASSISTANT", "SPRINT BOARD",
+        "RISK REGISTER", "BUDGET", "TEAM", "PROJECTS", "SETTINGS",
+    }
+    try:
+        qp = st.query_params.get("nav_page", "")
+        if qp and qp in NAV_VALID:
+            st.session_state["current_page"] = qp
+            # Clear it so back-button doesn't re-apply
+            st.query_params.clear()
+    except Exception:
+        pass
 
     # ── Sidebar ───────────────────────────────────────────────
     with st.sidebar:
@@ -2410,6 +2550,9 @@ def main():
         "SETTINGS":        page_settings,
     }
     pages[page](project, projects)
+
+    # ── Mobile bottom nav bar (only visible on screens < 768px) ──
+    render_mobile_nav(page)
 
 
 if __name__ == "__main__":

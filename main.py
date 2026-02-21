@@ -1767,6 +1767,7 @@ def page_settings(project, projects):
         ["🔑  API CONFIG", "📊  USAGE", "💾  DATA"],
         horizontal=True,
         label_visibility="collapsed",
+        key="settings_section",
     )
     st.markdown("---")
 
@@ -2155,16 +2156,14 @@ def page_ai_assistant(project, projects):
             completed_names = [f"Sprint {s['number']}: {s.get('goal','')[:35]}" for s in completed_sp]
             if not completed_names:
                 st.caption("No completed sprints yet.")
-                run_retro = st.button("▶  RUN RETROSPECTIVE", key="btn_retro",
-                                      use_container_width=True, disabled=True)
                 sel_sprint_retro = None
             else:
                 retro_choice = st.selectbox("Select sprint", completed_names, key="retro_sprint")
                 sel_num = int(retro_choice.split(":")[0].replace("Sprint","").strip())
                 sel_sprint_retro = next((s for s in completed_sp if s["number"]==sel_num), completed_sp[-1])
-                existing_notes = sel_sprint_retro.get("retro_notes", {})
-                run_retro = st.button("▶  RUN RETROSPECTIVE", key="btn_retro",
-                                      use_container_width=True, disabled=not ai_ready)
+            run_retro = st.button("▶  RUN RETROSPECTIVE", key="btn_retro",
+                                  use_container_width=True,
+                                  disabled=(not ai_ready or not completed_names))
 
         if run_retro and completed_sp:
             # Read sprint selection from session_state to get the value at button-press time
@@ -2372,10 +2371,9 @@ def page_ai_assistant(project, projects):
                         "insights")
         with st.container(border=True):
             all_projects = get_projects()
-            if len(all_projects) < 2:
+            has_multiple = len(all_projects) >= 2
+            if not has_multiple:
                 st.caption("Add a second project to enable comparison.")
-                run_insights = st.button("▶  RUN COMPARISON", key="btn_insights",
-                                         use_container_width=True, disabled=True)
             else:
                 other_projects = [p for p in all_projects if p["id"] != pid]
                 compare_to = st.selectbox("Compare with", [p["name"] for p in other_projects], key="compare_proj")
@@ -2386,8 +2384,9 @@ def page_ai_assistant(project, projects):
                     "Risk patterns",
                     "Budget efficiency",
                 ], key="insights_focus")
-                run_insights = st.button("▶  RUN COMPARISON", key="btn_insights",
-                                         use_container_width=True, disabled=not ai_ready)
+            run_insights = st.button("▶  RUN COMPARISON", key="btn_insights",
+                                     use_container_width=True,
+                                     disabled=(not ai_ready or not has_multiple))
 
             if run_insights and len(all_projects) >= 2:
                 # Read both selectors from session_state — guaranteed correct on re-run
@@ -2461,7 +2460,7 @@ def main():
             "TEAM",
             "PROJECTS",
             "SETTINGS",
-        ], label_visibility="collapsed")
+        ], label_visibility="collapsed", key="sidebar_nav")
 
         st.markdown("---")
         # Status panel
